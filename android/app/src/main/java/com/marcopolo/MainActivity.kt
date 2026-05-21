@@ -30,9 +30,9 @@ class MainActivity : ComponentActivity() {
         // Initialize osmdroid configuration
         org.osmdroid.config.Configuration.getInstance().apply {
             userAgentValue = packageName
-            tileFileSystemCacheMaxBytes = 20L * 1024 * 1024
-            tileFileSystemCacheTrimBytes = 10L * 1024 * 1024
-            tileDownloadThreads = 2
+            tileFileSystemCacheMaxBytes = 50L * 1024 * 1024  // 50MB cache for smoother panning
+            tileFileSystemCacheTrimBytes = 30L * 1024 * 1024
+            tileDownloadThreads = 4                          // parallel tile downloads
         }
 
         // Check if launched from a deep link (cold start)

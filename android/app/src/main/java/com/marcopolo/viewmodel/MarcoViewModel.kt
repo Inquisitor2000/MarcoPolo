@@ -1,6 +1,7 @@
 package com.marcopolo.viewmodel
 
 import android.app.Application
+import android.content.Intent
 import android.location.Location
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -30,6 +31,8 @@ data class MarcoUiState(
     // Distance & reveal
     val partnerDistance: Double? = null,   // straight-line meters (always computed)
     val partnerRevealed: Boolean = false,  // true when distance > REVEAL_THRESHOLD_M
+    // Disconnect dialog
+    val showDisconnectDialog: Boolean = false,
     // Walking route calculated by Marco
     val walkRoute: RouteResult? = null,
     // Debug counters
@@ -217,10 +220,11 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                         _uiState.update {
                             it.copy(
                                 isActive = false,
-                                error = "Polo disconnected"
+                                error = "Polo disconnected",
+                                showDisconnectDialog = true
                             )
                         }
-                        cleanup()
+                        // Don't cleanup — let user dismiss the dialog first
                     }
                     "location" -> {
                         msg.lat?.let { lat ->
@@ -286,6 +290,9 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         locationJob?.cancel()
         routeJob?.cancel()
         relayClient.disconnect()
+        getApplication<Application>().stopService(
+            Intent(getApplication(), LocationService::class.java)
+        )
         _uiState.update { MarcoUiState() }
     }
 

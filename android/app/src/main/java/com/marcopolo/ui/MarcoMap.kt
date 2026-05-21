@@ -38,12 +38,26 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import org.osmdroid.tileprovider.tilesource.ITileSource
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import kotlin.math.abs
+
+// Clean, high-contrast tile source with crisp label rendering.
+// CartoDB Positron (light) — free for small-scale use with attribution.
+private val HIGH_QUALITY_TILES: ITileSource = XYTileSource(
+    "CartoDB-Positron", 3, 19, 256, ".png",
+    arrayOf(
+        "https://a.basemaps.cartocdn.com/light_all/",
+        "https://b.basemaps.cartocdn.com/light_all/",
+        "https://c.basemaps.cartocdn.com/light_all/"
+    )
+)
 
 
 /**
@@ -62,7 +76,6 @@ fun MarcoMap(
     partnerLng: Double?,
     partnerRole: String = "Partner",
     routeLatLngs: List<List<Double>>? = null,
-    routeDistance: Double? = null,
     distanceToTarget: Double? = null     // straight-line meters to partner
 ) {
     val mapView = remember { mutableStateOf<MapView?>(null) }
@@ -129,12 +142,16 @@ fun MarcoMap(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 MapView(ctx).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
+                    setTileSource(HIGH_QUALITY_TILES)
                     setMultiTouchControls(true)
-                    setBuiltInZoomControls(false)
-                    minZoomLevel = 3.0
+                    zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                    minZoomLevel = 15.0  // ~4–5km view — allows twice the current zoom-out
                     maxZoomLevel = 19.0
-                    controller.setZoom(17.0)
+                    controller.setZoom(16.0)
+
+                    // Scale tiles for retina/high-DPI screens (crisp text & details)
+                    val density = ctx.resources.displayMetrics.density
+                    setTilesScaleFactor(density.coerceIn(1.0f, 2.0f))
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -221,12 +238,14 @@ fun MarcoMap(
                     youMarker?.isEnabled = false
                 }
 
-                // ── Rotate map only when orientation changes meaningfully (> 0.5°) ──
-                val orient = mapOrientation.value
-                if (abs(orient - prevOrientation) > 0.5f && mv != null) {
-                    mv.setMapOrientation(orient)
-                    prevOrientation = orient
-                    dirty = true
+                // ── Rotate map only in follow-me mode — panning freely disengages it ──
+                if (followMe) {
+                    val orient = mapOrientation.value
+                    if (abs(orient - prevOrientation) > 0.5f && mv != null) {
+                        mv.setMapOrientation(orient)
+                        prevOrientation = orient
+                        dirty = true
+                    }
                 }
 
                 // ── Center on own location (follow-me enabled by default) ──
@@ -298,7 +317,6 @@ fun MarcoMap(
                                 ),
                                 true, 80
                             )
-                            dirty = true
                         }
                     } else {
                         polylineBg?.isVisible = false
@@ -347,8 +365,16 @@ fun MarcoMap(
             FloatingActionButton(
                 onClick = {
                     followMe = !followMe
-                    if (followMe && ownLat != null && ownLng != null) {
-                        mapView.value?.controller?.animateTo(GeoPoint(ownLat, ownLng))
+                    if (followMe) {
+                        // Snap map rotation to current bearing immediately
+                        val bearing = -(ownBearing ?: 0f)
+                        prevOrientation = bearing
+                        mapOrientation.snapTo(bearing)
+                        mapView.value?.setMapOrientation(bearing)
+                        // Re-center on own position
+                        if (ownLat != null && ownLng != null) {
+                            mapView.value?.controller?.animateTo(GeoPoint(ownLat, ownLng))
+                        }
                     }
                 },
                 modifier = Modifier.size(40.dp),

@@ -66,7 +66,7 @@ fun PoloConfigScreen(
 
             OutlinedTextField(
                 value = code,
-                onValueChange = { code = it.uppercase().take(4) },
+                onValueChange = { code = it.filter { it.isLetterOrDigit() }.uppercase().take(4) },
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = MaterialTheme.typography.headlineLarge.copy(
                     fontFamily = FontFamily.Monospace,

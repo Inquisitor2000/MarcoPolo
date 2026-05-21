@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +42,12 @@ fun MarcoScreen(
     // Walking route from OSRM
     val activeRoute = uiState.walkRoute
 
+    // Start location foreground service (requires location permission already granted)
+    fun startLocationService() {
+        val intent = Intent(context, LocationService::class.java)
+        ContextCompat.startForegroundService(context, intent)
+    }
+
     // Location permission launcher
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -47,11 +55,12 @@ fun MarcoScreen(
         val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
         if (fineGranted || coarseGranted) {
+            startLocationService()
             viewModel.onPermissionsGranted()
         }
     }
 
-    // Check & request permissions
+    // Check & request permissions on first composition
     LaunchedEffect(Unit) {
         val hasFine = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
@@ -65,17 +74,46 @@ fun MarcoScreen(
                 )
             )
         } else {
+            startLocationService()
             viewModel.onPermissionsGranted()
         }
     }
 
-    // Start location service immediately (pre-load GPS ahead of connection)
-    LaunchedEffect(Unit) {
-        val intent = Intent(context, LocationService::class.java)
-        ContextCompat.startForegroundService(context, intent)
-    }
-
-    Scaffold(
+    // ── Permission gate: app content only renders after permission granted ──
+    if (!uiState.permissionsReady) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Location permission required",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "This app needs location access to share your position with your partner.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(onClick = {
+                    locationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        )
+                    )
+                }) {
+                    Text("Grant Permission")
+                }
+            }
+        }
+    } else {
+        Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Marco") },
@@ -124,7 +162,6 @@ fun MarcoScreen(
                     partnerLng = uiState.partnerLng,
                     partnerRole = "Polo",
                     routeLatLngs = activeRoute?.geometry,
-                    routeDistance = activeRoute?.distance,
                     distanceToTarget = uiState.partnerDistance
                 )
             }
@@ -246,6 +283,69 @@ fun MarcoScreen(
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
             )
+            }
+        }
+
+        // ── Disconnect dialog ──
+        if (uiState.showDisconnectDialog) {
+            Dialog(
+                onDismissRequest = {
+                    viewModel.cleanup()
+                    onBack()
+                },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .widthIn(min = 300.dp, max = 360.dp)
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Connection Lost",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Connection was interrupted by the other party.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(28.dp))
+                        Button(
+                            onClick = {
+                                viewModel.cleanup()
+                                onBack()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(25.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Text(
+                                "OK",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

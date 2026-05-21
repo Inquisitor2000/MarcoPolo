@@ -9,7 +9,14 @@ const ROOM_EXPIRE_MS = 17 * 60 * 1000; // 17min (2min buffer over 15min session)
 const rooms = new Map(); // code → { marco: ws|null, polo: ws|null, createdAt }
 
 function generateCode() {
-  return crypto.randomBytes(3).toString("base64url").toUpperCase().slice(0, 4);
+  // 4 alphanumeric chars (0-9, A-Z) — no special characters
+  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let code = "";
+  const bytes = crypto.randomBytes(4);
+  for (let i = 0; i < 4; i++) {
+    code += chars[bytes[i] % chars.length];
+  }
+  return code;
 }
 
 function cleanupExpiredRooms() {

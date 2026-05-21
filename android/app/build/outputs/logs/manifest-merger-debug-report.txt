@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-46:12
-INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-46:12
-INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-46:12
-INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-46:12
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-56:12
+INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-56:12
+INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-56:12
+INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:2:1-56:12
 MERGED from [androidx.navigation:navigation-common:2.7.7] /Users/base/.gradle/caches/transforms-4/0329f0d6fcc1f8c290cc97cb6a70038d/transformed/navigation-common-2.7.7/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.navigation:navigation-runtime:2.7.7] /Users/base/.gradle/caches/transforms-4/e178d942116a602d479e4a9a079a2920/transformed/navigation-runtime-2.7.7/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.navigation:navigation-common-ktx:2.7.7] /Users/base/.gradle/caches/transforms-4/9f06543dcb7ff47db475f30815807596/transformed/navigation-common-ktx-2.7.7/AndroidManifest.xml:2:1-7:12
@@ -104,8 +104,8 @@ ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml
 	android:name
 		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:11:22-74
 application
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:13:5-45:19
-INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:13:5-45:19
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:13:5-55:19
+INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:13:5-55:19
 MERGED from [com.google.android.gms:play-services-location:21.3.0] /Users/base/.gradle/caches/transforms-4/1481316a5534ced0187053f048437482/transformed/play-services-location-21.3.0/AndroidManifest.xml:6:5-20
 MERGED from [com.google.android.gms:play-services-location:21.3.0] /Users/base/.gradle/caches/transforms-4/1481316a5534ced0187053f048437482/transformed/play-services-location-21.3.0/AndroidManifest.xml:6:5-20
 MERGED from [com.google.android.gms:play-services-base:18.5.0] /Users/base/.gradle/caches/transforms-4/d900c48e090ac4a584fccc644ee7cd42/transformed/play-services-base-18.5.0/AndroidManifest.xml:4:5-6:19
@@ -133,65 +133,71 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/base/.gradle/caches/
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] /Users/base/.gradle/caches/transforms-4/16c1a9765e361675519feefd9d5c711c/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:17:9-35
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:18:9-35
 	android:label
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:16:9-35
-	android:icon
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:17:9-35
+	android:hardwareAccelerated
 		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:15:9-43
+	android:icon
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:16:9-43
 	android:allowBackup
 		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:14:9-35
 	android:theme
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:18:9-47
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:19:9-47
 	android:networkSecurityConfig
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:19:9-69
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:20:9-69
 activity#com.marcopolo.MainActivity
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:21:9-38:20
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:22:9-48:20
 	android:launchMode
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:24:13-44
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:25:13-44
 	android:exported
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:23:13-36
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:24:13-36
 	android:theme
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:25:13-51
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:26:13-51
 	android:name
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:22:13-41
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:23:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:26:13-29:29
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:27:13-30:29
 action#android.intent.action.MAIN
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:27:17-69
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:28:17-69
 	android:name
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:27:25-66
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:28:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:28:17-77
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:29:17-77
 	android:name
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:28:27-74
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:29:27-74
 intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:host:join+data:scheme:marcopolo
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:30:13-37:29
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:31:13-38:29
 action#android.intent.action.VIEW
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:31:17-69
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:32:17-69
 	android:name
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:31:25-66
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:32:25-66
 category#android.intent.category.DEFAULT
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:32:17-76
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:33:17-76
 	android:name
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:32:27-73
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:33:27-73
 category#android.intent.category.BROWSABLE
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:33:17-78
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:34:17-78
 	android:name
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:33:27-75
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:34:27-75
 data
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:34:17-36:43
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:35:17-37:43
 	android:host
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:36:21-40
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:37:21-40
 	android:scheme
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:35:21-47
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:36:21-47
+	android:pathPrefix
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:46:21-47
+intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:host:marcopolo-relay.onrender.com+data:pathPrefix:/join+data:scheme:https
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:39:13-47:29
 service#com.marcopolo.service.LocationService
-ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:40:9-43:40
+ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:50:9-53:40
 	android:exported
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:43:13-37
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:53:13-37
 	android:foregroundServiceType
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:42:13-53
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:52:13-53
 	android:name
-		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:41:13-52
+		ADDED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml:51:13-52
 uses-sdk
 INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /Users/base/Documents/FindMe/android/app/src/main/AndroidManifest.xml
