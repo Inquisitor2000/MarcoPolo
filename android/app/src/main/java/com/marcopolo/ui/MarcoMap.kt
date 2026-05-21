@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import org.osmdroid.tileprovider.tilesource.ITileSource
@@ -98,6 +99,7 @@ fun MarcoMap(
 
     // ── Follow-me toggle: auto-center on own position ──
     var followMe by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
 
     // ── Smooth map orientation animation ──
     val mapOrientation = remember { Animatable(0f) }
@@ -369,7 +371,7 @@ fun MarcoMap(
                         // Snap map rotation to current bearing immediately
                         val bearing = -(ownBearing ?: 0f)
                         prevOrientation = bearing
-                        mapOrientation.snapTo(bearing)
+                        scope.launch { mapOrientation.snapTo(bearing) }
                         mapView.value?.setMapOrientation(bearing)
                         // Re-center on own position
                         if (ownLat != null && ownLng != null) {
