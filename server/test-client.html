@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Marco Polo – Relay Test</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; display: grid; grid-template-columns: 1fr 1fr; height: 100vh; }
+  .panel { padding: 24px; overflow-y: auto; }
+  .panel:first-child { border-right: 1px solid #333; }
+  h2 { margin-bottom: 12px; font-weight: 600; color: #888; text-transform: uppercase; font-size: 13px; letter-spacing: 1px; }
+  .code-display { font-size: 48px; font-weight: 800; letter-spacing: 8px; color: #4ade80; text-align: center; padding: 24px; background: #1a1a1a; border-radius: 12px; margin-bottom: 16px; font-family: monospace; }
+  input, button { width: 100%; padding: 12px; border: 1px solid #333; background: #1a1a1a; color: #eee; border-radius: 8px; font-size: 15px; }
+  button { background: #4ade80; color: #000; font-weight: 600; cursor: pointer; border: none; margin-top: 8px; }
+  button:hover { background: #22c55e; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status { margin-top: 12px; font-size: 13px; color: #888; }
+  .status.connected { color: #4ade80; }
+  .log { margin-top: 16px; font-size: 12px; font-family: monospace; }
+  .log div { padding: 4px 0; border-bottom: 1px solid #222; color: #666; }
+  .log .rx { color: #60a5fa; }
+  .log .tx { color: #f59e0b; }
+  .log .info { color: #888; }
+  .coord-input { display: flex; gap: 8px; margin-top: 8px; }
+  .coord-input input { width: 50%; }
+  .partner { background: #1a1a1a; border-radius: 8px; padding: 16px; margin-bottom: 12px; text-align: center; }
+  .partner .latlng { font-size: 24px; font-weight: 700; color: #60a5fa; font-family: monospace; }
+  .partner .label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .partner .time { font-size: 11px; color: #444; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Marco Panel -->
+<div class="panel" id="marcoPanel">
+  <h2>🏁 Marco (Caller)</h2>
+  <button id="btnCreate">Create Room</button>
+  <div class="code-display" id="roomCode">—</div>
+  <div class="status" id="marcoStatus">Not connected</div>
+
+  <div class="partner" id="marcoPartner" style="display:none">
+    <div class="label">Polo's Location</div>
+    <div class="latlng" id="poloCoords">—</div>
+    <div class="time" id="poloTime"></div>
+  </div>
+
+  <div style="margin-top:16px">
+    <label style="font-size:12px;color:#666">Simulate Marco's GPS:</label>
+    <div class="coord-input">
+      <input type="text" id="marcoLat" value="48.8566" placeholder="Lat" />
+      <input type="text" id="marcolng" value="2.3522" placeholder="Lng" />
+    </div>
+    <button id="btnSendMarco" disabled>Send Location</button>
+  </div>
+
+  <div class="log" id="marcoLog"></div>
+</div>
+
+<!-- Polo Panel -->
+<div class="panel" id="poloPanel">
+  <h2>📍 Polo (Answer)</h2>
+  <div style="display:flex;gap:8px">
+    <input type="text" id="joinCode" placeholder="Enter room code" maxlength="6" />
+    <button id="btnJoin" style="width:auto;white-space:nowrap">Join</button>
+  </div>
+  <div class="status" id="poloStatus">Not connected</div>
+
+  <div class="partner" id="poloPartner" style="display:none">
+    <div class="label">Marco's Location</div>
+    <div class="latlng" id="marcoCoords">—</div>
+    <div class="time" id="marcoTime"></div>
+  </div>
+
+  <div style="margin-top:16px">
+    <label style="font-size:12px;color:#666">Simulate Polo's GPS:</label>
+    <div class="coord-input">
+      <input type="text" id="poloLat" value="48.8584" placeholder="Lat" />
+      <input type="text" id="pololng" value="2.2945" placeholder="Lng" />
+    </div>
+    <button id="btnSendPolo" disabled>Send Location</button>
+  </div>
+
+  <div class="log" id="poloLog"></div>
+</div>
+
+<script>
+const RELAY_URL = `ws://${location.host}/ws`;
+
+let marcoWs = null;
+let poloWs = null;
+let roomCodeVal = null;
+
+function log(el, msg, cls = 'info') {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Marco: Create Room ────────────────────────────────────────────────────────
+document.getElementById('btnCreate').onclick = async () => {
+  const res = await fetch('/rooms', { method: 'POST' });
+  const { code, wsUrl } = await res.json();
+  roomCodeVal = code;
+  document.getElementById('roomCode').textContent = code;
+  log(document.getElementById('marcoLog'), `Room created: ${code}`);
+  document.getElementById('marcoStatus').textContent = 'Waiting for Polo...';
+
+  connectMarco(code);
+};
+
+function connectMarco(code) {
+  if (marcoWs) marcoWs.close();
+  marcoWs = new WebSocket(`${RELAY_URL}/${code}`);
+
+  marcoWs.onopen = () => {
+    document.getElementById('marcoStatus').textContent = 'Connected – waiting for Polo';
+    document.getElementById('marcoStatus').className = 'status';
+    log(document.getElementById('marcoLog'), 'WebSocket connected');
+    document.getElementById('btnSendMarco').disabled = false;
+  };
+
+  marcoWs.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    log(document.getElementById('marcoLog'), `← ${JSON.stringify(msg)}`, 'rx');
+
+    if (msg.type === 'partner_joined') {
+      document.getElementById('marcoStatus').textContent = '✅ Polo connected!';
+      document.getElementById('marcoStatus').className = 'status connected';
+    }
+
+    if (msg.type === 'partner_disconnected') {
+      document.getElementById('marcoStatus').textContent = '❌ Polo disconnected';
+      document.getElementById('marcoStatus').className = 'status';
+      document.getElementById('marcoPartner').style.display = 'none';
+    }
+
+    if (msg.type === 'location') {
+      document.getElementById('poloCoords').textContent = `${msg.lat.toFixed(4)}, ${msg.lng.toFixed(4)}`;
+      document.getElementById('poloTime').textContent = new Date(msg.timestamp).toLocaleTimeString();
+      document.getElementById('marcoPartner').style.display = 'block';
+    }
+  };
+
+  marcoWs.onclose = () => {
+    document.getElementById('marcoStatus').textContent = 'Disconnected';
+    document.getElementById('marcoStatus').className = 'status';
+    document.getElementById('btnSendMarco').disabled = true;
+  };
+}
+
+document.getElementById('btnSendMarco').onclick = () => {
+  if (!marcoWs || marcoWs.readyState !== WebSocket.OPEN) return;
+  const lat = parseFloat(document.getElementById('marcoLat').value) || 0;
+  const lng = parseFloat(document.getElementById('marcolng').value) || 0;
+  const msg = { type: 'location', lat, lng, timestamp: Date.now(), accuracy: 10 };
+  marcoWs.send(JSON.stringify(msg));
+  log(document.getElementById('marcoLog'), `→ ${JSON.stringify(msg)}`, 'tx');
+};
+
+// ── Polo: Join Room ───────────────────────────────────────────────────────────
+document.getElementById('btnJoin').onclick = () => {
+  const code = document.getElementById('joinCode').value.trim().toUpperCase();
+  if (!code) return;
+  connectPolo(code);
+};
+
+function connectPolo(code) {
+  if (poloWs) poloWs.close();
+  poloWs = new WebSocket(`${RELAY_URL}/${code}`);
+
+  poloWs.onopen = () => {
+    document.getElementById('poloStatus').textContent = 'Connected';
+    document.getElementById('poloStatus').className = 'status connected';
+    log(document.getElementById('poloLog'), 'WebSocket connected');
+    document.getElementById('btnSendPolo').disabled = false;
+  };
+
+  poloWs.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    log(document.getElementById('poloLog'), `← ${JSON.stringify(msg)}`, 'rx');
+
+    if (msg.type === 'partner_joined') {
+      document.getElementById('poloStatus').textContent = '✅ Connected with Marco!';
+      document.getElementById('poloStatus').className = 'status connected';
+    }
+
+    if (msg.type === 'partner_disconnected') {
+      document.getElementById('poloStatus').textContent = '❌ Marco disconnected';
+      document.getElementById('poloStatus').className = 'status';
+      document.getElementById('poloPartner').style.display = 'none';
+    }
+
+    if (msg.type === 'location') {
+      document.getElementById('marcoCoords').textContent = `${msg.lat.toFixed(4)}, ${msg.lng.toFixed(4)}`;
+      document.getElementById('marcoTime').textContent = new Date(msg.timestamp).toLocaleTimeString();
+      document.getElementById('poloPartner').style.display = 'block';
+    }
+  };
+
+  poloWs.onclose = () => {
+    document.getElementById('poloStatus').textContent = 'Disconnected';
+    document.getElementById('poloStatus').className = 'status';
+    document.getElementById('btnSendPolo').disabled = true;
+  };
+}
+
+document.getElementById('btnSendPolo').onclick = () => {
+  if (!poloWs || poloWs.readyState !== WebSocket.OPEN) return;
+  const lat = parseFloat(document.getElementById('poloLat').value) || 0;
+  const lng = parseFloat(document.getElementById('pololng').value) || 0;
+  const msg = { type: 'location', lat, lng, timestamp: Date.now(), accuracy: 10 };
+  poloWs.send(JSON.stringify(msg));
+  log(document.getElementById('poloLog'), `→ ${JSON.stringify(msg)}`, 'tx');
+};
+
+// Auto-send location every 2s when connected (simulates real GPS)
+let autoInterval = null;
+document.addEventListener('click', () => {
+  if (!autoInterval) {
+    autoInterval = setInterval(() => {
+      document.getElementById('btnSendMarco')?.click();
+      document.getElementById('btnSendPolo')?.click();
+    }, 2000);
+  }
+});
+</script>
+</body>
+</html>

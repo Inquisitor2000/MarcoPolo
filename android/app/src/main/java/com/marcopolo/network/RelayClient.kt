@@ -1,0 +1,139 @@
+package com.marcopolo.network
+
+import com.marcopolo.model.WsMessage
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.json.Json
+import okhttp3.*
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.logging.HttpLoggingInterceptor
+
+/**
+ * Shared WebSocket client used by both Marco and Polo.
+ * Marco creates room → gets code → connects WS.
+ * Polo enters code → connects WS.
+ */
+class RelayClient {
+
+    private val json = Json { ignoreUnknownKeys = true }
+    private val httpClient = OkHttpClient.Builder()
+        .addInterceptor(HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        })
+        .build()
+
+    private var webSocket: WebSocket? = null
+    private val _messages = Channel<WsMessage>(Channel.BUFFERED)
+    val messages: Flow<WsMessage> = _messages.receiveAsFlow()
+
+    /** Resolve base URL dynamically so runtime changes to ServerConfig.baseUrl take effect */
+    private val baseUrl: String get() = ServerConfig.baseUrl
+
+    /**
+     * POST /rooms → get {code, wsUrl}
+     */
+    suspend fun createRoom(): Result<String> {
+        return try {
+            val request = Request.Builder()
+                .url("$baseUrl/rooms")
+                .post("".toRequestBody())
+                .build()
+            val response = httpClient.newCall(request).await()
+            val body = response.body?.string() ?: return Result.failure(Exception("Empty response"))
+            val room = json.decodeFromString<com.marcopolo.model.RoomResponse>(body)
+            Result.success(room.code)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Connect WebSocket to relay room
+     */
+    fun connect(roomCode: String) {
+        val wsUrl = baseUrl.replace("http://", "ws://").replace("https://", "wss://")
+        val request = Request.Builder()
+            .url("$wsUrl/ws/$roomCode")
+            .build()
+
+        webSocket = httpClient.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                _messages.trySend(WsMessage(type = "connected"))
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val msg = json.decodeFromString<WsMessage>(text)
+                    _messages.trySend(msg)
+                } catch (e: Exception) {
+                    // Ignore malformed messages
+                }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                _messages.trySend(WsMessage(type = "disconnected"))
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                _messages.trySend(WsMessage(type = "error"))
+            }
+        })
+    }
+
+    /**
+     * Send GPS location to partner
+     */
+    fun sendLocation(lat: Double, lng: Double, accuracy: Float) {
+        val msg = WsMessage(
+            type = "location",
+            lat = lat,
+            lng = lng,
+            timestamp = System.currentTimeMillis(),
+            accuracy = accuracy
+        )
+        webSocket?.send(json.encodeToString(WsMessage.serializer(), msg))
+    }
+
+    /**
+     * Send OSRM route geometry to partner so both see the same path.
+     * Only Marco calls this — Polo receives and renders.
+     * @param profile travel mode profile string ("foot" | "driving")
+     */
+    fun sendRoute(geometry: List<List<Double>>, distance: Double, duration: Double, profile: String = "foot") {
+        val msg = WsMessage(
+            type = "route",
+            geometry = geometry,
+            distance = distance,
+            duration = duration,
+            profile = profile
+        )
+        webSocket?.send(json.encodeToString(WsMessage.serializer(), msg))
+    }
+
+    fun disconnect() {
+        webSocket?.close(1000, "Session ended")
+        webSocket = null
+    }
+}
+
+/**
+ * OkHttp Call.await() extension for coroutines
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+suspend fun okhttp3.Call.await(): okhttp3.Response {
+    return suspendCancellableCoroutine { cont ->
+        enqueue(object : Callback {
+            override fun onResponse(call: Call, response: okhttp3.Response) {
+                cont.resume(response) {}
+            }
+
+            override fun onFailure(call: Call, e: java.io.IOException) {
+                cont.resumeWith(Result.failure(e))
+            }
+        })
+        cont.invokeOnCancellation { cancel() }
+    }
+}

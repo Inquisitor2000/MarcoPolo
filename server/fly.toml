@@ -1,0 +1,13 @@
+# flyctl deploy --local-only
+app = "marcopolo-relay"
+primary_region = "ams"
+
+[build]
+  image = "node:20-alpine"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0

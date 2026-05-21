@@ -1,0 +1,34 @@
+[
+    {
+        "merged": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-debug-56:/xml_network_security_config.xml.flat",
+        "source": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-main-58:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-debug-56:/drawable_ic_launcher_background.xml.flat",
+        "source": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-main-58:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.marcopolo.app-debug-56:/font_inter_bold.ttf.flat",
+        "source": "com.marcopolo.app-main-58:/font/inter_bold.ttf"
+    },
+    {
+        "merged": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-debug-56:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-main-58:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.marcopolo.app-debug-56:/font_inter_regular.ttf.flat",
+        "source": "com.marcopolo.app-main-58:/font/inter_regular.ttf"
+    },
+    {
+        "merged": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-debug-56:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "/Users/base/.gradle/daemon/8.7/com.marcopolo.app-main-58:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.marcopolo.app-debug-56:/font_inter_semibold.ttf.flat",
+        "source": "com.marcopolo.app-main-58:/font/inter_semibold.ttf"
+    },
+    {
+        "merged": "com.marcopolo.app-debug-56:/font_inter_medium.ttf.flat",
+        "source": "com.marcopolo.app-main-58:/font/inter_medium.ttf"
+    }
+]

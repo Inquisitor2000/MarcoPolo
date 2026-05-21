@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext (HTTP/WS) to local server for testing -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.2.2</domain>   <!-- Android emulator → host -->
+        <domain includeSubdomains="true">localhost</domain>
+        <ip-range>10.0.0.0/8</ip-range>
+        <ip-range>172.16.0.0/12</ip-range>
+        <ip-range>192.168.0.0/16</ip-range>
+    </domain-config>
+</network-security-config>
