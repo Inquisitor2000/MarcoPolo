@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "start": "node server/server.js",
-    "build": "cd server && npm ci --production"
+    "postinstall": "cd server && npm ci --production"
   }
 }
