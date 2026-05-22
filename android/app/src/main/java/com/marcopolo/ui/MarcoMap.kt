@@ -38,6 +38,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
+import com.marcopolo.util.hapticClick
 import androidx.lifecycle.LifecycleEventObserver
 import org.osmdroid.tileprovider.tilesource.ITileSource
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -49,14 +50,14 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import kotlin.math.abs
 
-// Clean, high-contrast tile source with crisp label rendering.
-// CartoDB Positron (light) — free for small-scale use with attribution.
+// Detailed tile source with building outlines, street names, and POI labels.
+// CartoDB Voyager — free for small-scale use with attribution.
 private val HIGH_QUALITY_TILES: ITileSource = XYTileSource(
-    "CartoDB-Positron", 3, 19, 256, ".png",
+    "CartoDB-Voyager", 3, 19, 256, ".png",
     arrayOf(
-        "https://a.basemaps.cartocdn.com/light_all/",
-        "https://b.basemaps.cartocdn.com/light_all/",
-        "https://c.basemaps.cartocdn.com/light_all/"
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/"
     )
 )
 
@@ -147,9 +148,9 @@ fun MarcoMap(
                     setTileSource(HIGH_QUALITY_TILES)
                     setMultiTouchControls(true)
                     zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-                    minZoomLevel = 15.0  // ~4–5km view — allows twice the current zoom-out
+                    minZoomLevel = 15.0  // ~4–5km view — allows one zoom-out from default
                     maxZoomLevel = 19.0
-                    controller.setZoom(16.0)
+                    controller.setZoom(17.0)
 
                     // Scale tiles for retina/high-DPI screens (crisp text & details)
                     val density = ctx.resources.displayMetrics.density
@@ -161,13 +162,13 @@ fun MarcoMap(
                     mapView.value = this
                     onResume()
 
-                    youBitmap = createYouBitmap(ctx, 28)
-                    partnerBitmap = createPartnerBitmap(ctx, 24, partnerRole)
+                    youBitmap = createYouBitmap(ctx, 36)
+                    partnerBitmap = createPartnerBitmap(ctx, 36, partnerRole)
 
                     // ── Polyline background (glow) ──
                     polylineBg = Polyline().apply {
                         outlinePaint.color = Color.argb(60, 0, 200, 100)
-                        outlinePaint.strokeWidth = 14f
+                        outlinePaint.strokeWidth = 22f
                         outlinePaint.isAntiAlias = true
                         outlinePaint.strokeCap = Paint.Cap.ROUND
                         outlinePaint.strokeJoin = Paint.Join.ROUND
@@ -177,7 +178,7 @@ fun MarcoMap(
                     // ── Polyline foreground ──
                     polylineFg = Polyline().apply {
                         outlinePaint.color = Color.parseColor("#FF22DD66")
-                        outlinePaint.strokeWidth = 6f
+                        outlinePaint.strokeWidth = 10f
                         outlinePaint.isAntiAlias = true
                         outlinePaint.strokeCap = Paint.Cap.ROUND
                         outlinePaint.strokeJoin = Paint.Join.ROUND
@@ -365,7 +366,7 @@ fun MarcoMap(
         ) {
             // Center-me / follow-me button (top)
             FloatingActionButton(
-                onClick = {
+                onClick = hapticClick {
                     followMe = !followMe
                     if (followMe) {
                         // Snap map rotation to current bearing immediately
@@ -415,7 +416,7 @@ fun MarcoMap(
 
             // Zoom in
             FloatingActionButton(
-                onClick = { mapView.value?.controller?.zoomIn() },
+                onClick = hapticClick { mapView.value?.controller?.zoomIn() },
                 modifier = Modifier.size(40.dp),
                 shape = CircleShape,
                 containerColor = ComposeColor(0xCCFFFFFF),
@@ -429,7 +430,7 @@ fun MarcoMap(
 
             // Zoom out
             FloatingActionButton(
-                onClick = { mapView.value?.controller?.zoomOut() },
+                onClick = hapticClick { mapView.value?.controller?.zoomOut() },
                 modifier = Modifier.size(40.dp),
                 shape = CircleShape,
                 containerColor = ComposeColor(0xCCFFFFFF),

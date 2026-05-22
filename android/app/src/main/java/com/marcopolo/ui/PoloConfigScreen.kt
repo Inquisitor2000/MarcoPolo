@@ -3,6 +3,8 @@ package com.marcopolo.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,6 +16,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.marcopolo.util.hapticClick
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,8 +31,12 @@ fun PoloConfigScreen(
             TopAppBar(
                 title = { Text("Polo") },
                 navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Text("Back")
+                    IconButton(onClick = hapticClick(onBack)) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -101,7 +108,7 @@ fun PoloConfigScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
-                onClick = { onStartSession(code) },
+                onClick = hapticClick { onStartSession(code) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

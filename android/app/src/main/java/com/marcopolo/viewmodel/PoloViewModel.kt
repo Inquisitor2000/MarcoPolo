@@ -30,8 +30,11 @@ data class PoloUiState(
     // Distance & reveal
     val partnerDistance: Double? = null,
     val partnerRevealed: Boolean = false,
+    val hasPartnerLocation: Boolean = false,
     // Disconnect dialog
     val showDisconnectDialog: Boolean = false,
+    // Found dialog
+    val showFoundDialog: Boolean = false,
     // Walking route received from Marco
     val walkRoute: RouteResult? = null,
     // Debug counters
@@ -50,6 +53,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val TAG = "MarcoPolo.Polo"
         private const val REVEAL_THRESHOLD_M = 10
+        private const val FOUND_THRESHOLD_M = 15
     }
 
     /**
@@ -158,13 +162,19 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
 
                                 Log.d(TAG, "partner distance=${dist}m  threshold=${REVEAL_THRESHOLD_M}m  revealed=$revealed")
 
-                                _uiState.update {
-                                    it.copy(
+                                _uiState.update { current ->
+                                    val wasFound = current.showFoundDialog
+                                    val nowFound = dist != null && dist <= FOUND_THRESHOLD_M
+                                    current.copy(
+                                        // Hide exact location until revealed (>10m) for privacy,
+                                        // but track that we received it so the map can render
                                         partnerLat = if (revealed) lat else null,
                                         partnerLng = if (revealed) lng else null,
                                         partnerDistance = dist,
                                         partnerRevealed = revealed,
-                                        walkRoute = if (revealed) it.walkRoute else null
+                                        hasPartnerLocation = true,
+                                        walkRoute = if (revealed) current.walkRoute else null,
+                                        showFoundDialog = wasFound || nowFound
                                     )
                                 }
                             }
@@ -205,6 +215,10 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                 if (seconds <= 0) cleanup()
             }
         }
+    }
+
+    fun dismissFoundDialog() {
+        _uiState.update { it.copy(showFoundDialog = false) }
     }
 
     fun cleanup() {

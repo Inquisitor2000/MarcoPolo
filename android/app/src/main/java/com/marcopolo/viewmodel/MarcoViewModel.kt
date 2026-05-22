@@ -31,8 +31,11 @@ data class MarcoUiState(
     // Distance & reveal
     val partnerDistance: Double? = null,   // straight-line meters (always computed)
     val partnerRevealed: Boolean = false,  // true when distance > REVEAL_THRESHOLD_M
+    val hasPartnerLocation: Boolean = false, // true when any location data received from partner
     // Disconnect dialog
     val showDisconnectDialog: Boolean = false,
+    // Found dialog
+    val showFoundDialog: Boolean = false,
     // Walking route calculated by Marco
     val walkRoute: RouteResult? = null,
     // Debug counters
@@ -61,6 +64,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         private const val ROUTE_MIN_INTERVAL_MS = 10_000L   // Don't recalculate more than every 10s
         private const val ROUTE_MOVEMENT_THRESHOLD_M = 30f   // Recalculate only if moved > 30m
         private const val REVEAL_THRESHOLD_M = 10
+        private const val FOUND_THRESHOLD_M = 15
     }
 
     /**
@@ -245,14 +249,20 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
                                 Log.d(TAG, "partner distance=${dist}m  threshold=${REVEAL_THRESHOLD_M}m  revealed=$revealed")
 
-                                _uiState.update {
-                                    it.copy(
+                                _uiState.update { current ->
+                                    val wasFound = current.showFoundDialog
+                                    val nowFound = dist != null && dist <= FOUND_THRESHOLD_M
+                                    current.copy(
+                                        // Hide exact location until revealed (>10m) for privacy,
+                                        // but track that we received it so the map can render
                                         partnerLat = if (revealed) lat else null,
                                         partnerLng = if (revealed) lng else null,
                                         partnerDistance = dist,
                                         partnerRevealed = revealed,
+                                        hasPartnerLocation = true,
                                         // Clear both routes when unrevealed
-                                        walkRoute = if (revealed) it.walkRoute else null
+                                        walkRoute = if (revealed) current.walkRoute else null,
+                                        showFoundDialog = wasFound || nowFound
                                     )
                                 }
                                 // Only calculate route when revealed
@@ -283,6 +293,10 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun dismissFoundDialog() {
+        _uiState.update { it.copy(showFoundDialog = false) }
     }
 
     fun cleanup() {

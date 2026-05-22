@@ -79,6 +79,14 @@ class LocationService : Service(), SensorEventListener {
                 locationCallback,
                 mainLooper
             )
+
+            // Immediately fetch last known location (usually cached from other apps)
+            // so the UI doesn't block waiting for first GPS fix.
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                if (location != null && _currentLocation.value == null) {
+                    _currentLocation.value = location
+                }
+            }
         } catch (e: SecurityException) {
             // Location permission not granted
             stopSelf()

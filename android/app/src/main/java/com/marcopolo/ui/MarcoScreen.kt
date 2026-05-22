@@ -3,19 +3,19 @@ package com.marcopolo.ui
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -26,8 +26,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marcopolo.service.LocationService
+import com.marcopolo.util.DebugOverlay
 import com.marcopolo.util.formatCountdown
-import com.marcopolo.viewmodel.MarcoUiState
+import com.marcopolo.util.hapticClick
 import com.marcopolo.viewmodel.MarcoViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,6 +39,7 @@ fun MarcoScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    var showDebug by remember { mutableStateOf(false) }
 
     // Walking route from OSRM
     val activeRoute = uiState.walkRoute
@@ -99,7 +101,7 @@ fun MarcoScreen(
                     modifier = Modifier.padding(horizontal = 32.dp)
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = {
+                Button(onClick = hapticClick {
                     locationPermissionLauncher.launch(
                         arrayOf(
                             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -113,12 +115,22 @@ fun MarcoScreen(
             }
         }
     } else {
+        // Map renders once session is active and at least one of: own GPS has a fix
+        // OR partner data has arrived. This prevents being stuck waiting for GPS indoors.
+        val hasAnyLocation = uiState.ownLat != null || uiState.hasPartnerLocation
+        val mapReady = uiState.isActive && hasAnyLocation
+
         Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Marco") },
+                title = {
+                    Text(
+                        text = "Marco",
+                        modifier = Modifier.clickable { showDebug = !showDebug }
+                    )
+                },
                 actions = {
-                    if (uiState.isActive) {
+                    if (mapReady) {
                         Text(
                             text = formatCountdown(uiState.remainingSeconds),
                             fontSize = 18.sp,
@@ -129,11 +141,15 @@ fun MarcoScreen(
                     }
                 },
                 navigationIcon = {
-                    TextButton(onClick = {
+                    IconButton(onClick = hapticClick {
                         viewModel.cleanup()
                         onBack()
                     }) {
-                        Text("Back", fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -141,60 +157,106 @@ fun MarcoScreen(
                 )
             )
         }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // ── Map always rendered (tiles cache in background) ──
+        ) { padding ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .alpha(if (uiState.isActive) 1f else 0f)
+                    .padding(padding)
             ) {
-                MarcoMap(
-                    modifier = Modifier.fillMaxSize(),
-                    ownLat = uiState.ownLat,
-                    ownLng = uiState.ownLng,
-                    ownBearing = uiState.ownBearing,
-                    partnerLat = uiState.partnerLat,
-                    partnerLng = uiState.partnerLng,
-                    partnerRole = "Polo",
-                    routeLatLngs = activeRoute?.geometry,
-                    distanceToTarget = uiState.partnerDistance
+                // ── Debug overlay (togglable via title tap) ──
+                DebugOverlay(
+                    show = showDebug,
+                    onToggle = { showDebug = false },
+                    lines = listOf(
+                        "isActive" to "${uiState.isActive}",
+                        "ownLat" to "${uiState.ownLat ?: "null"}",
+                        "ownLng" to "${uiState.ownLng ?: "null"}",
+                        "partnerLat" to "${uiState.partnerLat ?: "null"}",
+                        "partnerRevealed" to "${uiState.partnerRevealed}",
+                        "hasPartnerLoc" to "${uiState.hasPartnerLocation}",
+                        "permReady" to "${uiState.permissionsReady}",
+                        "locReady" to "${uiState.locationReady}",
+                        "sentCount" to "${uiState.sentCount}",
+                        "roomCode" to "${uiState.roomCode ?: "null"}",
+                        "error" to "${uiState.error ?: "none"}"
+                    )
                 )
-            }
 
-            // ── Overlay content ──
-            if (uiState.isActive) {
-                // ── Info panel overlaid on map ──
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .padding(12.dp)
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (uiState.error != null) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Text(
-                                text = uiState.error!!,
-                                modifier = Modifier.padding(16.dp),
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                // ── Map rendered only when both locations known ──
+                if (mapReady) {
+                    MarcoMap(
+                        modifier = Modifier.fillMaxSize(),
+                        ownLat = uiState.ownLat,
+                        ownLng = uiState.ownLng,
+                        ownBearing = uiState.ownBearing,
+                        partnerLat = uiState.partnerLat,
+                        partnerLng = uiState.partnerLng,
+                        partnerRole = "Polo",
+                        routeLatLngs = activeRoute?.geometry,
+                        distanceToTarget = uiState.partnerDistance
+                    )
+
+                    // ── Info panel overlaid on map ──
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (uiState.error != null) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text(
+                                    text = uiState.error!!,
+                                    modifier = Modifier.padding(16.dp),
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
                         }
                     }
-                }
-            } else {
-                // ── Room code full-screen display (map hidden beneath) ──
+                } else if (uiState.isActive) {
+                    // ── Connected but waiting for locations ──
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 4.dp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        val waitingMessage = if (uiState.ownLat == null && !uiState.hasPartnerLocation) {
+                            "Acquiring GPS and waiting for Polo..."
+                        } else if (uiState.ownLat == null) {
+                            "Acquiring GPS..."
+                        } else {
+                            "Waiting for Polo's location..."
+                        }
+                        Text(
+                            text = waitingMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = uiState.roomCode ?: "",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                // ── Room code full-screen display ──
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -241,7 +303,7 @@ fun MarcoScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(
-                                onClick = {
+                                onClick = hapticClick {
                                     val shareIntent = Intent().apply {
                                         action = Intent.ACTION_SEND
                                         putExtra(
@@ -276,13 +338,69 @@ fun MarcoScreen(
                 }
             }
 
-            // ── Debug overlay (top-right) ──
-            DebugPanel(
-                info = buildDebugInfo(uiState),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-            )
+            }
+        }
+
+        // ── Found dialog ──
+        if (uiState.showFoundDialog) {
+            val view = androidx.compose.ui.platform.LocalView.current
+            LaunchedEffect(Unit) {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            }
+            Dialog(
+                onDismissRequest = { },
+                properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .widthIn(min = 300.dp, max = 360.dp)
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Congratulations!",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "You found your Polo!",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(28.dp))
+                        Button(
+                            onClick = {
+                                viewModel.dismissFoundDialog()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(25.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Text(
+                                "Awesome!",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -324,7 +442,7 @@ fun MarcoScreen(
                         )
                         Spacer(modifier = Modifier.height(28.dp))
                         Button(
-                            onClick = {
+                            onClick = hapticClick {
                                 viewModel.cleanup()
                                 onBack()
                             },
@@ -350,40 +468,4 @@ fun MarcoScreen(
     }
 }
 
-/** Build debug key-value pairs from MarcoUiState */
-private fun buildDebugInfo(s: MarcoUiState): List<Pair<String, String>> {
-    val items = mutableListOf<Pair<String, String>>()
-    items.add("Room" to (s.roomCode ?: "—"))
-    items.add("Partner" to if (s.isActive) "✅ joined" else "⏳ waiting")
-    items.add("Perms" to s.permissionsReady.toString())
-    items.add("Locn" to s.locationReady.toString())
-    items.add("Sent" to s.sentCount.toString())
-    items.add("Me" to formatCoord(s.ownLat, s.ownLng))
-    items.add("Them" to formatCoord(s.partnerLat, s.partnerLng))
-    items.add("Dist" to formatDist(s.partnerDistance))
-    items.add("Reveal" to if (s.partnerRevealed) "✅" else "🔒")
-    items.add("Route" to formatRoute(s.walkRoute?.geometry, s.walkRoute?.distance, s.walkRoute?.duration))
-    return items
-}
 
-private fun formatCoord(lat: Double?, lng: Double?): String {
-    if (lat == null || lng == null) return "—"
-    return "%.5f, %.5f".format(lat, lng)
-}
-
-private fun formatDist(m: Double?): String {
-    if (m == null) return "—"
-    return if (m < 1000) "%.0f m".format(m) else "%.2f km".format(m / 1000)
-}
-
-private fun formatRoute(
-    geo: List<List<Double>>?,
-    dist: Double?,
-    dur: Double?
-): String {
-    if (geo == null) return "—"
-    val pts = geo.size
-    val d = dist?.let { if (it < 1000) "%.0f m".format(it) else "%.2f km".format(it / 1000) } ?: "?"
-    val t = dur?.let { "${(it / 60).toInt()} min" } ?: "?"
-    return "$pts pts · $d · $t"
-}
