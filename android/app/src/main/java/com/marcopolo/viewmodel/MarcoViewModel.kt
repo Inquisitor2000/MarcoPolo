@@ -6,7 +6,6 @@ import android.location.Location
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.marcopolo.model.WsMessage
 import com.marcopolo.network.RelayClient
 import com.marcopolo.network.RouteFinder
 import com.marcopolo.network.RouteResult
@@ -84,7 +83,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.permissionsReady) return
         _uiState.update { it.copy(permissionsReady = true) }
 
-        // Start GPS collection immediately (pre-load location data before partner joins)
+        // Start GPS collection immediately (preload location data before partner joins)
         onLocationReady()
 
         viewModelScope.launch {
@@ -271,7 +270,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                 )
                             }
                         }
-                        // Don't cleanup — let user dismiss the dialog first
+                        // Don't clean up — let user dismiss the dialog first
                     }
                     "location" -> {
                         msg.lat?.let { lat ->
@@ -353,10 +352,6 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
     fun completeSession() {
         _uiState.update { it.copy(showFoundDialog = true) }
         relayClient.sendSessionComplete()
-    }
-
-    fun dismissFoundDialog() {
-        _uiState.update { it.copy(showFoundDialog = false) }
     }
 
     fun cleanup() {

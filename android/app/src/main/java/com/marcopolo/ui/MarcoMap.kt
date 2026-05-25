@@ -9,6 +9,7 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -28,13 +29,11 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,10 +42,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
-import com.marcopolo.util.hapticClick
 import androidx.lifecycle.LifecycleEventObserver
+import com.marcopolo.util.hapticClick
 import org.osmdroid.tileprovider.tilesource.ITileSource
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
@@ -77,6 +75,7 @@ private const val MIN_BBOX_CHANGE = 0.0003
  * and a follow-me toggle. The map rotates smoothly around the
  * own GPS position.
  */
+@Suppress("ClickableViewAccessibility")
 @Composable
 fun MarcoMap(
     modifier: Modifier = Modifier,
@@ -100,8 +99,8 @@ fun MarcoMap(
     var youBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var partnerBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     // Cached drawables — avoid BitmapDrawable allocation on every update lambda run
-    var youDrawable by remember { mutableStateOf<android.graphics.drawable.BitmapDrawable?>(null) }
-    var partnerDrawable by remember { mutableStateOf<android.graphics.drawable.BitmapDrawable?>(null) }
+    var youDrawable by remember { mutableStateOf<BitmapDrawable?>(null) }
+    var partnerDrawable by remember { mutableStateOf<BitmapDrawable?>(null) }
 
     // ── Route path fade-in/out alpha (0 → 1 over 600ms) ──
     // Animates when partner reveal state changes; stays at 1 when both locations known.
@@ -111,15 +110,15 @@ fun MarcoMap(
     )
 
     // ── Change-detection state (suppress redundant map operations) ──
-    var prevOwnLat by remember { mutableStateOf(Double.NaN) }
-    var prevOwnLng by remember { mutableStateOf(Double.NaN) }
-    var prevPartnerLat by remember { mutableStateOf(Double.NaN) }
-    var prevPartnerLng by remember { mutableStateOf(Double.NaN) }
-    var prevOrientation by remember { mutableStateOf(-1f) }
+    var prevOwnLat by remember { mutableDoubleStateOf(Double.NaN) }
+    var prevOwnLng by remember { mutableDoubleStateOf(Double.NaN) }
+    var prevPartnerLat by remember { mutableDoubleStateOf(Double.NaN) }
+    var prevPartnerLng by remember { mutableDoubleStateOf(Double.NaN) }
+    var prevOrientation by remember { mutableFloatStateOf(-1f) }
     var prevRouteKey by remember { mutableStateOf("") }
     var bboxDone by remember { mutableStateOf(false) }
     // Dynamic bbox re-zoom — re-adjust when follow-me is on and distance changes significantly
-    var prevBboxDiagonal by remember { mutableStateOf(0.0) }
+    var prevBboxDiagonal by remember { mutableDoubleStateOf(0.0) }
     // Trigger to zoom from a LaunchedEffect (post-layout) instead of from the update lambda
     var bboxZoomTrigger by remember { mutableIntStateOf(0) }
 
@@ -133,7 +132,7 @@ fun MarcoMap(
     // LaunchedEffect restarts from ~16Hz to ~1-2Hz on foot.
     val targetOrientation = remember(ownBearing) {
         val b = ownBearing ?: 0f
-        -(Math.round(b / 5f) * 5f).toFloat()
+        -(Math.round(b / 5f) * 5f)
     }
     // Delay orientation animation until map tiles settle (~2s).
     // Prevents startup CPU burst: compass + map init + tile loading
@@ -254,8 +253,8 @@ fun MarcoMap(
                     mapView.value = this
                     onResume()
 
-                    youBitmap = createYouBitmap(ctx, 36)
-                    partnerBitmap = createPartnerBitmap(ctx, 36, partnerRole)
+                    youBitmap = createYouBitmap(ctx)
+                    partnerBitmap = createPartnerBitmap(ctx, partnerRole)
                     youDrawable = youBitmap?.let { BitmapDrawable(ctx.resources, it) }
                     partnerDrawable = partnerBitmap?.let { BitmapDrawable(ctx.resources, it) }
 
@@ -321,7 +320,6 @@ fun MarcoMap(
             },
             update = { _ ->
                 val mv = mapView.value
-                var dirty = false
 
                 // ── Update own marker at GPS position (rotates with bearing) ──
                 if (ownLat != null && ownLng != null) {
@@ -341,7 +339,6 @@ fun MarcoMap(
                     if (abs(orient - prevOrientation) > 0.5f && mv != null) {
                         mv.setMapOrientation(orient)
                         prevOrientation = orient
-                        dirty = true
                     }
                 }
 
@@ -352,7 +349,6 @@ fun MarcoMap(
                         prevOwnLng = ownLng
                         if (followMe) {
                             mv.controller.setCenter(GeoPoint(ownLat, ownLng))
-                            dirty = true
                         }
                     }
                 }
@@ -368,14 +364,12 @@ fun MarcoMap(
                         }
                         prevPartnerLat = partnerLat
                         prevPartnerLng = partnerLng
-                        dirty = true
                     }
                 } else {
                     if (prevPartnerLat.isNaN().not()) {
                         partnerMarker?.isEnabled = false
                         prevPartnerLat = Double.NaN
                         prevPartnerLng = Double.NaN
-                        dirty = true
                     }
                 }
 
@@ -388,10 +382,10 @@ fun MarcoMap(
                 if (routeKey != prevRouteKey && mv != null) {
                     prevRouteKey = routeKey
                     if (haveBoth) {
-                        val oLat = ownLat!!
-                        val oLng = ownLng!!
-                        val pLat = partnerLat!!
-                        val pLng = partnerLng!!
+                        val oLat = ownLat
+                        val oLng = ownLng
+                        val pLat = partnerLat
+                        val pLng = partnerLng
                         val points = if (routeLatLngs != null && routeLatLngs.size >= 2) {
                             routeLatLngs.map { GeoPoint(it[0], it[1]) }
                         } else {
@@ -425,17 +419,14 @@ fun MarcoMap(
                         polylineFg?.isVisible = false
                         bboxDone = false
                     }
-                    dirty = true
                 }
 
                 // ── Route alpha on every update — smooth fade-in/out ──
                 polylineBg?.outlinePaint?.alpha = (routeAlpha * 60).toInt().coerceIn(0, 255)
                 polylineFg?.outlinePaint?.alpha = (routeAlpha * 255).toInt().coerceIn(0, 255)
-                dirty = true
 
-                if (dirty) {
-                    try { mv?.invalidate() } catch (_: Exception) {}
-                }
+                // Request redraw after any update
+                try { mv?.invalidate() } catch (_: Exception) {}
             }
         )
 
@@ -581,10 +572,12 @@ fun MarcoMap(
 
 // ── Bitmap helpers (own marker, partner marker) ──────────────────────────────
 
+private const val MARKER_SIZE_DP = 36
+
 /** Blue circle with white direction arrow for "You" marker (rotated by heading). */
-private fun createYouBitmap(context: android.content.Context, sizeDp: Int): android.graphics.Bitmap {
+private fun createYouBitmap(context: android.content.Context): android.graphics.Bitmap {
     val density = context.resources.displayMetrics.density
-    val size = (sizeDp * density).toInt().coerceAtLeast(20)
+    val size = (MARKER_SIZE_DP * density).toInt().coerceAtLeast(20)
     val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val cx = size / 2f
@@ -624,9 +617,9 @@ private fun createYouBitmap(context: android.content.Context, sizeDp: Int): andr
     return bitmap
 }
 
-private fun createPartnerBitmap(context: android.content.Context, sizeDp: Int, role: String): android.graphics.Bitmap {
+private fun createPartnerBitmap(context: android.content.Context, role: String): android.graphics.Bitmap {
     val density = context.resources.displayMetrics.density
-    val size = (sizeDp * density).toInt().coerceAtLeast(20)
+    val size = (MARKER_SIZE_DP * density).toInt().coerceAtLeast(20)
     val bitmap = android.graphics.Bitmap.createBitmap(size, (size * 1.3f).toInt(), android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val cx = size / 2f

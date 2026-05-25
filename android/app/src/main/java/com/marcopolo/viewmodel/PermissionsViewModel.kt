@@ -20,5 +20,4 @@ class PermissionsViewModel : ViewModel() {
         _state.value = if (granted) PermissionsState.GRANTED else PermissionsState.DENIED
     }
 
-    fun isGranted(): Boolean = _state.value == PermissionsState.GRANTED
 }

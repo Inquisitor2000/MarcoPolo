@@ -2,14 +2,13 @@ package com.marcopolo.util
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -32,7 +31,10 @@ fun DebugOverlay(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .graphicsLayer(
+                shape = RoundedCornerShape(8.dp),
+                clip = true
+            )
             .background(Color(0xCC1A1A2E))
             .clickable { onToggle() }
             .padding(horizontal = 12.dp, vertical = 8.dp),

@@ -10,8 +10,15 @@
 -keepclassmembers class com.marcopolo.model.** { *** Companion; }
 -keepclasseswithmembers class com.marcopolo.model.** { kotlinx.serialization.KSerializer serializer(...); }
 
-# Keep osmdroid
--keep class org.osmdroid.** { *; }
+# Keep osmdroid — used at runtime for tile rendering and overlays
+-keep class org.osmdroid.events.** { *; }
+-keep class org.osmdroid.tileprovider.** { *; }
+-keep class org.osmdroid.util.GeoPoint { *; }
+-keep class org.osmdroid.util.BoundingBox { *; }
+-keep class org.osmdroid.views.MapView { *; }
+-keep class org.osmdroid.views.overlay.Marker { *; }
+-keep class org.osmdroid.views.overlay.Polyline { *; }
+-keep class org.osmdroid.views.CustomZoomButtonsController { *; }
 -dontwarn org.osmdroid.**
 
 # Keep OkHttp

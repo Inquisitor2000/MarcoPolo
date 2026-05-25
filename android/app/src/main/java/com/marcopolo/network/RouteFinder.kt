@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
+
 package com.marcopolo.network
 
 import kotlinx.coroutines.Dispatchers

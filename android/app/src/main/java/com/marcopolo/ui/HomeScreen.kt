@@ -2,6 +2,7 @@ package com.marcopolo.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,7 +57,8 @@ fun HomeScreen(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.POST_NOTIFICATIONS
+                    *if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                        arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
                 )
             )
         }
@@ -98,7 +100,8 @@ fun HomeScreen(
                     arrayOf(
                         Manifest.permission.ACCESS_FINE_LOCATION,
                         Manifest.permission.ACCESS_COARSE_LOCATION,
-                        Manifest.permission.POST_NOTIFICATIONS
+                        *if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
                     )
                 )
             }) {
@@ -183,7 +186,10 @@ fun HomeScreen(
     if (showFoundDialog) {
         val view = LocalView.current
         LaunchedEffect(Unit) {
-            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            // CONFIRM requires API 30; silently no-ops on 29
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            }
         }
         Dialog(
             onDismissRequest = { onDismissFound() },

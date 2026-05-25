@@ -69,8 +69,7 @@ class MainActivity : ComponentActivity() {
 
         // Only allow /join/{CODE} paths
         val match = Regex("^/join/([0-9]{4})$").find(path)
-        val code = match?.groupValues?.getOrNull(1)
-        return if (code != null) code else null
+        return match?.groupValues?.getOrNull(1)
     }
 }
 

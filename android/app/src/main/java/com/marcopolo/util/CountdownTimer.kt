@@ -21,14 +21,4 @@ fun formatCountdown(seconds: Int): String {
     return "%02d:%02d".format(min, sec)
 }
 
-/**
- * Formats a distance in meters to a human-readable string.
- * Shows "X m" for < 1 km, "X.X km" for >= 1 km.
- */
-fun formatDistance(meters: Double): String {
-    return if (meters < 1000) {
-        "${meters.toInt()} m to target"
-    } else {
-        "%.1f km to target".format(meters / 1000)
-    }
-}
+

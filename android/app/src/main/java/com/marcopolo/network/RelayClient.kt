@@ -132,11 +132,11 @@ class RelayClient {
  * OkHttp Call.await() extension for coroutines
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-suspend fun okhttp3.Call.await(): okhttp3.Response {
+suspend fun Call.await(): Response {
     return suspendCancellableCoroutine { cont ->
         enqueue(object : Callback {
-            override fun onResponse(call: Call, response: okhttp3.Response) {
-                cont.resume(response) {}
+            override fun onResponse(call: Call, response: Response) {
+                cont.resumeWith(Result.success(response))
             }
 
             override fun onFailure(call: Call, e: java.io.IOException) {

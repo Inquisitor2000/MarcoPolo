@@ -1,5 +1,6 @@
 package com.marcopolo.util
 
+import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalView
@@ -15,7 +16,10 @@ import androidx.compose.ui.platform.LocalView
 fun hapticClick(onClick: () -> Unit): () -> Unit {
     val view = LocalView.current
     return {
-        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        // CONFIRM requires API 30; silently no-ops on 29
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        }
         onClick()
     }
 }

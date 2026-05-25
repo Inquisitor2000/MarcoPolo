@@ -1,16 +1,8 @@
+@file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
+
 package com.marcopolo.model
 
 import kotlinx.serialization.Serializable
-
-@Serializable
-data class LocationMessage(
-    val type: String = "location",
-    val lat: Double,
-    val lng: Double,
-    val timestamp: Long,
-    val accuracy: Float,
-    val from: String? = null  // "marco" | "polo"
-)
 
 @Serializable
 data class RoomResponse(

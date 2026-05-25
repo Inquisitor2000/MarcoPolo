@@ -55,8 +55,6 @@ class LocationService : Service(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var rotationVectorSensor: Sensor? = null
 
-    private var pollingJob: Job? = null
-
     override fun onCreate() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
