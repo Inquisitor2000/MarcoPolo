@@ -2,17 +2,22 @@ package com.marcopolo.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marcopolo.util.hapticClick
@@ -23,6 +28,8 @@ import com.marcopolo.viewmodel.PermissionsViewModel
 fun HomeScreen(
     onMarcoClick: () -> Unit,
     onPoloClick: () -> Unit,
+    showFoundDialog: Boolean = false,
+    onDismissFound: () -> Unit = {},
     permissionsViewModel: PermissionsViewModel = viewModel()
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -169,6 +176,67 @@ fun HomeScreen(
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp
             )
+        }
+    }
+
+    // ── Found dialog (shown on top of home screen after a match) ──
+    if (showFoundDialog) {
+        val view = LocalView.current
+        LaunchedEffect(Unit) {
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        }
+        Dialog(
+            onDismissRequest = { onDismissFound() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .widthIn(min = 300.dp, max = 360.dp)
+                    .padding(16.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Congratulations!",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "You found each other!",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
+                    Button(
+                        onClick = { onDismissFound() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Text(
+                            "Awesome!",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
         }
     }
 }

@@ -25,6 +25,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,6 +97,13 @@ fun MarcoMap(
     // Cached drawables — avoid BitmapDrawable allocation on every update lambda run
     var youDrawable by remember { mutableStateOf<android.graphics.drawable.BitmapDrawable?>(null) }
     var partnerDrawable by remember { mutableStateOf<android.graphics.drawable.BitmapDrawable?>(null) }
+
+    // ── Route path fade-in/out alpha (0 → 1 over 600ms) ──
+    // Animates when partner reveal state changes; stays at 1 when both locations known.
+    val routeAlpha by animateFloatAsState(
+        targetValue = if (partnerLat != null && ownLat != null) 1f else 0f,
+        animationSpec = tween(600)
+    )
 
     // ── Change-detection state (suppress redundant map operations) ──
     var prevOwnLat by remember { mutableStateOf(Double.NaN) }
@@ -227,7 +236,7 @@ fun MarcoMap(
                     setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
                     zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
                     minZoomLevel = 15.0  // ~4–5km view — gentle starting zoom
-                    maxZoomLevel = 18.0  // limit tile count on low-end devices
+                    maxZoomLevel = 19.0  // matching tile source (CartoDB Voyager max 19)
                     controller.setZoom(16.0)  // moderate initial zoom, smoothed by bbox animation when data arrives
 
                     // Scale tiles for retina/high-DPI screens (crisp text & details)
@@ -413,6 +422,11 @@ fun MarcoMap(
                     }
                     dirty = true
                 }
+
+                // ── Route alpha on every update — smooth fade-in/out ──
+                polylineBg?.outlinePaint?.alpha = (routeAlpha * 60).toInt().coerceIn(0, 255)
+                polylineFg?.outlinePaint?.alpha = (routeAlpha * 255).toInt().coerceIn(0, 255)
+                dirty = true
 
                 if (dirty) {
                     try { mv?.invalidate() } catch (_: Exception) {}

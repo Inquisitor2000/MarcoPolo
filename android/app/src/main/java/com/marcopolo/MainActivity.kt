@@ -78,6 +78,17 @@ class MainActivity : ComponentActivity() {
 fun MarcoPoloNavGraph(deepLinkCode: String? = null) {
     val navController = rememberNavController()
 
+    // Shared found-dialog state: persists across navigation so the popup
+    // can render on top of the home screen after a found event.
+    var foundDialogShown by remember { mutableStateOf(false) }
+
+    // Called by MarcoScreen/PoloMapScreen when the found condition is met.
+    // Sets the shared flag and navigates home; the ViewModel's onCleared() handles cleanup.
+    val onFound: () -> Unit = {
+        foundDialogShown = true
+        navController.popBackStack("home", false)
+    }
+
     // Navigate directly to Polo when a deep link arrives
     LaunchedEffect(deepLinkCode) {
         val code = deepLinkCode ?: return@LaunchedEffect
@@ -92,12 +103,15 @@ fun MarcoPoloNavGraph(deepLinkCode: String? = null) {
         composable("home") {
             HomeScreen(
                 onMarcoClick = { navController.navigate("marco") },
-                onPoloClick = { navController.navigate("polo_config") }
+                onPoloClick = { navController.navigate("polo_config") },
+                showFoundDialog = foundDialogShown,
+                onDismissFound = { foundDialogShown = false }
             )
         }
         composable("marco") {
             MarcoScreen(
-                onBack = { navController.popBackStack("home", false) }
+                onBack = { navController.popBackStack("home", false) },
+                onFound = onFound
             )
         }
         composable("polo_config") {
@@ -112,7 +126,8 @@ fun MarcoPoloNavGraph(deepLinkCode: String? = null) {
             val code = backStackEntry.arguments?.getString("code") ?: return@composable
             PoloMapScreen(
                 roomCode = code,
-                onBack = { navController.popBackStack("home", false) }
+                onBack = { navController.popBackStack("home", false) },
+                onFound = onFound
             )
         }
     }

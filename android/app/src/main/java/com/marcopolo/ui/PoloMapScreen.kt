@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -25,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marcopolo.service.LocationService
+import kotlinx.coroutines.delay
 import com.marcopolo.util.DebugOverlay
 import com.marcopolo.util.formatCountdown
 import com.marcopolo.util.hapticClick
@@ -35,6 +39,7 @@ import com.marcopolo.viewmodel.PoloViewModel
 fun PoloMapScreen(
     roomCode: String,
     onBack: () -> Unit,
+    onFound: () -> Unit = {},
     viewModel: PoloViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -189,190 +194,156 @@ fun PoloMapScreen(
                     )
             )
 
-            // ── Map rendered only when session active AND both locations known ──
-            if (mapReady) {
-                MarcoMap(
-                    modifier = Modifier.fillMaxSize(),
-                    ownLat = uiState.ownLat,
-                    ownLng = uiState.ownLng,
-                    ownBearing = uiState.ownBearing,
-                    partnerLat = uiState.partnerLat,
-                    partnerLng = uiState.partnerLng,
-                    partnerRole = "Marco",
-                    routeLatLngs = activeRoute?.geometry,
-                    distanceToTarget = uiState.partnerDistance
-                )
+            // ── Content crossfade: room → loading → map ──
+            val contentState = when {
+                mapReady -> "map"
+                uiState.isActive -> "loading"
+                else -> "room"
+            }
+            Crossfade(
+                targetState = contentState,
+                animationSpec = tween(400)
+            ) { state ->
+                when (state) {
+                    "map" -> Box(Modifier.fillMaxSize()) {
+                        MarcoMap(
+                            modifier = Modifier.fillMaxSize(),
+                            ownLat = uiState.ownLat,
+                            ownLng = uiState.ownLng,
+                            ownBearing = uiState.ownBearing,
+                            partnerLat = uiState.partnerLat,
+                            partnerLng = uiState.partnerLng,
+                            partnerRole = "Marco",
+                            routeLatLngs = activeRoute?.geometry,
+                            distanceToTarget = uiState.partnerDistance
+                        )
 
-                // ── Info panel overlaid on map ──
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (uiState.error != null) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
+                        // ── Info panel overlaid on map ──
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = uiState.error!!,
-                                modifier = Modifier.padding(16.dp),
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                            if (uiState.error != null) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                    )
+                                ) {
+                                    Text(
+                                        text = uiState.error!!,
+                                        modifier = Modifier.padding(16.dp),
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
                         }
                     }
-                }
-            } else if (uiState.isActive) {
-                // ── Connected but waiting for locations ──
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(48.dp),
-                        color = MaterialTheme.colorScheme.secondary,
-                        strokeWidth = 4.dp
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    val waitingMessage = if (uiState.ownLat == null && !uiState.hasPartnerLocation) {
-                        "Acquiring GPS and waiting for Marco..."
-                    } else if (uiState.ownLat == null) {
-                        "Acquiring GPS..."
-                    } else {
-                        "Waiting for Marco's location..."
-                    }
-                    Text(
-                        text = waitingMessage,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Room $roomCode",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-            } else {
-                // ── Waiting for Marco to connect ──
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    if (uiState.error != null) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Text(
-                                text = uiState.error!!,
-                                modifier = Modifier.padding(16.dp),
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
+                    "loading" -> Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = MaterialTheme.colorScheme.secondary,
+                            strokeWidth = 4.dp
+                        )
                         Spacer(modifier = Modifier.height(24.dp))
+                        val waitingMessage = if (uiState.ownLat == null && !uiState.hasPartnerLocation) {
+                            "Acquiring GPS and waiting for Marco..."
+                        } else if (uiState.ownLat == null) {
+                            "Acquiring GPS..."
+                        } else {
+                            "Waiting for Marco's location..."
+                        }
+                        Text(
+                            text = waitingMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Room $roomCode",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
                     }
+                    "room" -> Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (uiState.error != null) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text(
+                                    text = uiState.error!!,
+                                    modifier = Modifier.padding(16.dp),
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
 
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(48.dp),
-                        color = MaterialTheme.colorScheme.secondary,
-                        strokeWidth = 4.dp
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "Waiting for Marco to connect...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Room $roomCode",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = MaterialTheme.colorScheme.secondary,
+                            strokeWidth = 4.dp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = "Waiting for Marco to connect...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Room $roomCode",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                 }
             }
 
             }
         }
 
-        // ── Found dialog ──
-        if (uiState.showFoundDialog) {
-            val view = androidx.compose.ui.platform.LocalView.current
-            LaunchedEffect(Unit) {
-                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            }
-            Dialog(
-                onDismissRequest = { },
-                properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
-            ) {
-                Card(
-                    modifier = Modifier
-                        .widthIn(min = 300.dp, max = 360.dp)
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "Congratulations!",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            "You found your Marco!",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(28.dp))
-                        Button(
-                            onClick = {
-                                viewModel.cleanup()
-                                onBack()
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(25.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            )
-                        ) {
-                            Text(
-                                "Awesome!",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
+        // ── Distance threshold haptic feedback ──
+        // Light tap when crossing closer-distance milestones
+        val thresholdView = LocalView.current
+        val triggeredThresholds = remember { mutableSetOf<Int>() }
+        LaunchedEffect(uiState.partnerDistance) {
+            val dist = uiState.partnerDistance ?: return@LaunchedEffect
+            for (t in listOf(1000, 500, 250, 125, 75, 50)) {
+                if (dist <= t && t !in triggeredThresholds) {
+                    triggeredThresholds.add(t)
+                    thresholdView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 }
+            }
+        }
+
+        // ── Found: navigate home, dialog renders on top of home screen ──
+        if (uiState.showFoundDialog) {
+            LaunchedEffect(Unit) {
+                delay(1500)
+                onFound()
             }
         }
 

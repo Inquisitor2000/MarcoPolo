@@ -233,12 +233,18 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                         onLocationReady()
                     }
                     "partner_disconnected" -> {
-                        _uiState.update {
-                            it.copy(
-                                isActive = false,
-                                error = "Polo disconnected",
-                                showDisconnectDialog = true
-                            )
+                        _uiState.update { current ->
+                            if (current.showFoundDialog) {
+                                // Already found — don't change anything, found dialog
+                                // handles navigation + cleanup after delay
+                                current
+                            } else {
+                                current.copy(
+                                    isActive = false,
+                                    error = "Polo disconnected",
+                                    showDisconnectDialog = true
+                                )
+                            }
                         }
                         // Don't cleanup — let user dismiss the dialog first
                     }
@@ -276,7 +282,10 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                         hasPartnerLocation = true,
                                         // Clear walkRoute when unrevealed
                                         walkRoute = if (revealed) current.walkRoute else null,
-                                        showFoundDialog = wasFound || nowFound
+                                        showFoundDialog = wasFound || nowFound,
+                                        // If this update triggers found, cancel any pending disconnect dialog
+                                        showDisconnectDialog = if (wasFound || nowFound) false else current.showDisconnectDialog,
+                                        error = if (wasFound || nowFound) null else current.error
                                     )
                                 }
                                 // Always request route calc using raw coords (pre-reveal caching)
