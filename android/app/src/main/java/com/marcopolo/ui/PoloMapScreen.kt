@@ -173,19 +173,20 @@ fun PoloMapScreen(
             DebugOverlay(
                 show = showDebug,
                 onToggle = { showDebug = false },
-                lines = listOf(
-                    "isActive" to "${uiState.isActive}",
-                    "ownLat" to "${uiState.ownLat ?: "null"}",
-                    "ownLng" to "${uiState.ownLng ?: "null"}",
-                    "partnerLat" to "${uiState.partnerLat ?: "null"}",
-                    "partnerRevealed" to "${uiState.partnerRevealed}",
-                    "hasPartnerLoc" to "${uiState.hasPartnerLocation}",
-                    "permReady" to "${uiState.permissionsReady}",
-                    "locReady" to "${uiState.locationReady}",
-                    "sentCount" to "${uiState.sentCount}",
-                    "roomCode" to "${uiState.roomCode ?: "null"}",
-                    "error" to "${uiState.error ?: "none"}"
-                )
+                    lines = listOf(
+                        "isActive" to "${uiState.isActive}",
+                        "ownLat" to "${uiState.ownLat ?: "null"}",
+                        "ownLng" to "${uiState.ownLng ?: "null"}",
+                        "partnerLat" to "${uiState.partnerLat ?: "null"}",
+                        "partnerRevealed" to "${uiState.partnerRevealed}",
+                        "hasPartnerLoc" to "${uiState.hasPartnerLocation}",
+                        "rawPartnerLat" to "${uiState.rawPartnerLat ?: "null"}",
+                        "permReady" to "${uiState.permissionsReady}",
+                        "locReady" to "${uiState.locationReady}",
+                        "sentCount" to "${uiState.sentCount}",
+                        "roomCode" to "${uiState.roomCode ?: "null"}",
+                        "error" to "${uiState.error ?: "none"}"
+                    )
             )
 
             // ── Map rendered only when session active AND both locations known ──

@@ -176,6 +176,7 @@ fun MarcoScreen(
                         "partnerLat" to "${uiState.partnerLat ?: "null"}",
                         "partnerRevealed" to "${uiState.partnerRevealed}",
                         "hasPartnerLoc" to "${uiState.hasPartnerLocation}",
+                        "rawPartnerLat" to "${uiState.rawPartnerLat ?: "null"}",
                         "permReady" to "${uiState.permissionsReady}",
                         "locReady" to "${uiState.locationReady}",
                         "sentCount" to "${uiState.sentCount}",

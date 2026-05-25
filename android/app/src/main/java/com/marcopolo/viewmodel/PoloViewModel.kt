@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcopolo.model.WsMessage
 import com.marcopolo.network.RelayClient
+import com.marcopolo.network.RouteFinder
 import com.marcopolo.network.RouteResult
 import com.marcopolo.service.LocationService
 import com.marcopolo.util.countdownFlow
@@ -35,10 +36,13 @@ data class PoloUiState(
     val showDisconnectDialog: Boolean = false,
     // Found dialog
     val showFoundDialog: Boolean = false,
-    // Walking route received from Marco
+    // Walking route received from Marco (or calculated locally)
     val walkRoute: RouteResult? = null,
     // Pending route cached while partner not yet revealed
     val pendingWalkRoute: RouteResult? = null,
+    // Raw partner coords (always set on receive, even before reveal)
+    val rawPartnerLat: Double? = null,
+    val rawPartnerLng: Double? = null,
     // Debug counters
     val sentCount: Int = 0
 )
@@ -51,9 +55,19 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
 
     private var timerJob: Job? = null
     private var locationJob: Job? = null
+    private var routeJob: Job? = null
+
+    // Route debounce tracking
+    private var lastRouteCalcMs: Long = 0L
+    private var lastRouteOwnLat: Double? = null
+    private var lastRouteOwnLng: Double? = null
+    private var lastRoutePartnerLat: Double? = null
+    private var lastRoutePartnerLng: Double? = null
 
     companion object {
         private const val TAG = "MarcoPolo.Polo"
+        private const val ROUTE_MIN_INTERVAL_MS = 10_000L   // Don't recalculate more than every 10s
+        private const val ROUTE_MOVEMENT_THRESHOLD_M = 30f   // Recalculate only if moved > 30m
         private const val REVEAL_THRESHOLD_M = 10
         private const val FOUND_THRESHOLD_M = 15
     }
@@ -114,6 +128,8 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                         _uiState.update { it.copy(ownLat = lat, ownLng = lng, sentCount = it.sentCount + 1) }
                         relayClient.sendLocation(lat, lng, location.accuracy)
                         Log.d(TAG, "sendLocation called (sent=${_uiState.value.sentCount}) bearing=$bearing")
+                        // Calculate route locally using own position + raw partner coords
+                        requestRouteUpdate()
                     }
                 }
             }
@@ -170,8 +186,10 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                     val nowFound = dist != null && dist <= FOUND_THRESHOLD_M
                                     val justRevealed = revealed && !wasRevealed
                                     current.copy(
-                                        // Hide exact location until revealed (>10m) for privacy,
-                                        // but track that we received it so the map can render
+                                        // Always store raw coords for route calculation,
+                                        // but only reveal exact location when >10m (privacy)
+                                        rawPartnerLat = lat,
+                                        rawPartnerLng = lng,
                                         partnerLat = if (revealed) lat else null,
                                         partnerLng = if (revealed) lng else null,
                                         partnerDistance = dist,
@@ -189,6 +207,8 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                         showFoundDialog = wasFound || nowFound
                                     )
                                 }
+                                // Request route calculation using raw partner coords
+                                requestRouteUpdate(force = revealed)
                             }
                         }
                     }
@@ -237,9 +257,83 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(showFoundDialog = false) }
     }
 
+    /**
+     * Calculate walking route via OSRM when both locations known.
+     * Uses raw partner coords for pre-reveal route calculation.
+     * Debounced: won't call more than once per 10s unless moved > 30m.
+     *
+     * @param force if true, bypasses debounce (used on reveal transition)
+     */
+    private fun requestRouteUpdate(force: Boolean = false) {
+        val state = _uiState.value
+        val ownLat = state.ownLat ?: run {
+            Log.d(TAG, "requestRouteUpdate: ownLat is null, skipping")
+            return
+        }
+        val ownLng = state.ownLng ?: run {
+            Log.d(TAG, "requestRouteUpdate: ownLng is null, skipping")
+            return
+        }
+        if (!state.hasPartnerLocation) {
+            Log.d(TAG, "requestRouteUpdate: no partner location yet, skipping")
+            return
+        }
+        val partnerLat = state.rawPartnerLat ?: run {
+            Log.d(TAG, "requestRouteUpdate: rawPartnerLat is null, skipping")
+            return
+        }
+        val partnerLng = state.rawPartnerLng ?: run {
+            Log.d(TAG, "requestRouteUpdate: rawPartnerLng is null, skipping")
+            return
+        }
+
+        Log.d(TAG, "requestRouteUpdate: own=$ownLat,$ownLng  partner=$partnerLat,$partnerLng  force=$force")
+
+        // Debounce: check if enough time has passed OR if moved significantly
+        val now = System.currentTimeMillis()
+        val enoughTimePassed = (now - lastRouteCalcMs) >= ROUTE_MIN_INTERVAL_MS
+        val ownMoved = lastRouteOwnLat == null || distanceBetween(
+            lastRouteOwnLat!!, lastRouteOwnLng!!, ownLat, ownLng
+        ) > ROUTE_MOVEMENT_THRESHOLD_M
+        val partnerMoved = lastRoutePartnerLat == null || distanceBetween(
+            lastRoutePartnerLat!!, lastRoutePartnerLng!!, partnerLat, partnerLng
+        ) > ROUTE_MOVEMENT_THRESHOLD_M
+
+        Log.d(TAG, "requestRouteUpdate: enoughTimePassed=$enoughTimePassed ownMoved=$ownMoved partnerMoved=$partnerMoved")
+
+        if (!force && !enoughTimePassed && !ownMoved && !partnerMoved) {
+            Log.d(TAG, "requestRouteUpdate: debounce skip")
+            return
+        }
+
+        // Update last known positions
+        lastRouteOwnLat = ownLat
+        lastRouteOwnLng = ownLng
+        lastRoutePartnerLat = partnerLat
+        lastRoutePartnerLng = partnerLng
+        lastRouteCalcMs = now
+
+        routeJob?.cancel()
+        routeJob = viewModelScope.launch {
+            Log.d(TAG, "requestRouteUpdate: calculating WALKING route")
+            val result = RouteFinder.findRoute(ownLat, ownLng, partnerLat, partnerLng)
+
+            Log.d(TAG, "requestRouteUpdate: walkResult=${result != null}")
+
+            _uiState.update { state ->
+                // Only show route on map when partner is revealed
+                state.copy(
+                    walkRoute = if (state.partnerRevealed) result else state.walkRoute,
+                    pendingWalkRoute = result ?: state.pendingWalkRoute
+                )
+            }
+        }
+    }
+
     fun cleanup() {
         timerJob?.cancel()
         locationJob?.cancel()
+        routeJob?.cancel()
         relayClient.disconnect()
         getApplication<Application>().stopService(
             Intent(getApplication(), LocationService::class.java)
