@@ -49,11 +49,42 @@ data class MarcoUiState(
     val sentCount: Int = 0
 )
 
+/** Subset of UI state that drives the map rendering. Split from [MarcoUiState]
+ * to avoid map recomposition on non-map state changes (e.g., countdown ticks, error messages). */
+data class MarcoMapState(
+    val ownLat: Double? = null,
+    val ownLng: Double? = null,
+    val ownBearing: Float? = null,
+    val partnerLat: Double? = null,
+    val partnerLng: Double? = null,
+    val routeLatLngs: List<List<Double>>? = null,
+    val distanceToTarget: Double? = null,
+    val showCheckmark: Boolean = false,
+    val isActive: Boolean = false,
+    val hasPartnerLocation: Boolean = false
+)
+
 class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val relayClient = RelayClient()
     private val _uiState = MutableStateFlow(MarcoUiState())
     val uiState: StateFlow<MarcoUiState> = _uiState.asStateFlow()
+
+    /** Derive map-relevant state to avoid recomposition on UI-only changes */
+    val mapState: StateFlow<MarcoMapState> = _uiState.map { ui ->
+        MarcoMapState(
+            ownLat = ui.ownLat,
+            ownLng = ui.ownLng,
+            ownBearing = ui.ownBearing,
+            partnerLat = ui.partnerLat,
+            partnerLng = ui.partnerLng,
+            routeLatLngs = ui.walkRoute?.geometry,
+            distanceToTarget = ui.partnerDistance,
+            showCheckmark = ui.showCheckmark,
+            isActive = ui.isActive,
+            hasPartnerLocation = ui.hasPartnerLocation
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, MarcoMapState())
 
     private var timerJob: Job? = null
     private var locationJob: Job? = null
@@ -73,6 +104,11 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         private const val REVEAL_THRESHOLD_M = 10
         private const val FOUND_THRESHOLD_M = 15
         private const val CHECKMARK_THRESHOLD_M = 30
+
+        /** Conditional debug log — avoids string allocation when not loggable */
+        private inline fun logD(crossinline message: () -> String) {
+            if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, message())
+        }
     }
 
     /**
@@ -132,10 +168,10 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                     if (lat != lastLat || lng != lastLng) {
                         lastLat = lat
                         lastLng = lng
-                        Log.d(TAG, "own location: $lat, $lng  accuracy=${location.accuracy}")
+                        logD { "own location: $lat, $lng  accuracy=${location.accuracy}" }
                         _uiState.update { it.copy(ownLat = lat, ownLng = lng, sentCount = it.sentCount + 1) }
                         relayClient.sendLocation(lat, lng, location.accuracy)
-                        Log.d(TAG, "sendLocation called (sent=${_uiState.value.sentCount}) bearing=$bearing")
+                        logD { "sendLocation called (sent=${_uiState.value.sentCount}) bearing=$bearing" }
                         requestRouteUpdate()
                     }
                 }
@@ -279,7 +315,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                 val ownLat = state.ownLat
                                 val ownLng = state.ownLng
 
-                                Log.d(TAG, "rcvd partner location: $lat,$lng  from=${msg.from}  ownGPS=$ownLat,$ownLng")
+                                logD { "rcvd partner location: $lat,$lng  from=${msg.from}  ownGPS=$ownLat,$ownLng" }
 
                                 // Always compute straight-line distance
                                 val dist = if (ownLat != null && ownLng != null) {
@@ -289,7 +325,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                                 val revealed = dist != null && dist > REVEAL_THRESHOLD_M
 
-                                Log.d(TAG, "partner distance=${dist}m  threshold=${REVEAL_THRESHOLD_M}m  revealed=$revealed")
+                                logD { "partner distance=${dist}m  threshold=${REVEAL_THRESHOLD_M}m  revealed=$revealed" }
 
                                 _uiState.update { current ->
                                     val wasFound = current.showFoundDialog
@@ -318,7 +354,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                                 // Always request route calc using raw coords (pre-reveal caching)
                                 // Force immediate calculation when revealed
-                                Log.d(TAG, "requesting route update (revealed=$revealed)")
+                                logD { "requesting route update (revealed=$revealed)" }
                                 requestRouteUpdate(force = revealed)
                             }
                         }

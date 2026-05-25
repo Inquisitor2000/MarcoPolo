@@ -65,7 +65,7 @@ class LocationService : Service(), SensorEventListener {
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
         rotationVectorSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
 
         // Register periodic location callback (every 2s)
@@ -80,7 +80,7 @@ class LocationService : Service(), SensorEventListener {
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY, 5000L  // 5-second interval
         ).apply {
-            setMinUpdateIntervalMillis(1000L)
+            setMinUpdateIntervalMillis(3000L)
         }.build()
 
         try {

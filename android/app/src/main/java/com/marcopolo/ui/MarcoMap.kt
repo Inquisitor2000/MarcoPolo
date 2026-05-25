@@ -112,6 +112,7 @@ fun MarcoMap(
     // ── Change-detection state (suppress redundant map operations) ──
     var prevOwnLat by remember { mutableDoubleStateOf(Double.NaN) }
     var prevOwnLng by remember { mutableDoubleStateOf(Double.NaN) }
+    var prevOwnBearing by remember { mutableFloatStateOf(java.lang.Float.NaN) }
     var prevPartnerLat by remember { mutableDoubleStateOf(Double.NaN) }
     var prevPartnerLng by remember { mutableDoubleStateOf(Double.NaN) }
     var prevOrientation by remember { mutableFloatStateOf(-1f) }
@@ -320,17 +321,36 @@ fun MarcoMap(
             },
             update = { _ ->
                 val mv = mapView.value
+                var dirty = false
 
                 // ── Update own marker at GPS position (rotates with bearing) ──
                 if (ownLat != null && ownLng != null) {
-                    youMarker?.apply {
-                        position = GeoPoint(ownLat, ownLng)
-                        isEnabled = true
-                        icon = youDrawable
-                        rotation = -(ownBearing ?: 0f)
+                    val posChanged = ownLat != prevOwnLat || ownLng != prevOwnLng
+                    val bearing = ownBearing ?: 0f
+                    val bearingChanged = bearing != prevOwnBearing
+                    if (posChanged || bearingChanged) {
+                        youMarker?.apply {
+                            position = GeoPoint(ownLat, ownLng)
+                            isEnabled = true
+                            icon = youDrawable
+                            rotation = -bearing
+                        }
+                        prevOwnLat = ownLat
+                        prevOwnLng = ownLng
+                        prevOwnBearing = bearing
+                        dirty = true
+                        if (posChanged && followMe && mv != null) {
+                            mv.controller.setCenter(GeoPoint(ownLat, ownLng))
+                        }
                     }
                 } else {
-                    youMarker?.isEnabled = false
+                    if (prevOwnLat.isNaN().not()) {
+                        youMarker?.isEnabled = false
+                        prevOwnLat = Double.NaN
+                        prevOwnLng = Double.NaN
+                        prevOwnBearing = java.lang.Float.NaN
+                        dirty = true
+                    }
                 }
 
                 // ── Rotate map only in follow-me mode — panning freely disengages it ──
@@ -339,17 +359,7 @@ fun MarcoMap(
                     if (abs(orient - prevOrientation) > 0.5f && mv != null) {
                         mv.setMapOrientation(orient)
                         prevOrientation = orient
-                    }
-                }
-
-                // ── Center on own location (follow-me enabled by default) ──
-                if (ownLat != null && ownLng != null && mv != null) {
-                    if (ownLat != prevOwnLat || ownLng != prevOwnLng) {
-                        prevOwnLat = ownLat
-                        prevOwnLng = ownLng
-                        if (followMe) {
-                            mv.controller.setCenter(GeoPoint(ownLat, ownLng))
-                        }
+                        dirty = true
                     }
                 }
 
@@ -364,12 +374,14 @@ fun MarcoMap(
                         }
                         prevPartnerLat = partnerLat
                         prevPartnerLng = partnerLng
+                        dirty = true
                     }
                 } else {
                     if (prevPartnerLat.isNaN().not()) {
                         partnerMarker?.isEnabled = false
                         prevPartnerLat = Double.NaN
                         prevPartnerLng = Double.NaN
+                        dirty = true
                     }
                 }
 
@@ -381,6 +393,7 @@ fun MarcoMap(
 
                 if (routeKey != prevRouteKey && mv != null) {
                     prevRouteKey = routeKey
+                    dirty = true
                     if (haveBoth) {
                         val oLat = ownLat
                         val oLng = ownLng
@@ -422,11 +435,19 @@ fun MarcoMap(
                 }
 
                 // ── Route alpha on every update — smooth fade-in/out ──
-                polylineBg?.outlinePaint?.alpha = (routeAlpha * 60).toInt().coerceIn(0, 255)
-                polylineFg?.outlinePaint?.alpha = (routeAlpha * 255).toInt().coerceIn(0, 255)
+                val alphaBg = (routeAlpha * 60).toInt().coerceIn(0, 255)
+                val alphaFg = (routeAlpha * 255).toInt().coerceIn(0, 255)
+                if (alphaBg != (polylineBg?.outlinePaint?.alpha ?: 0) ||
+                    alphaFg != (polylineFg?.outlinePaint?.alpha ?: 0)) {
+                    polylineBg?.outlinePaint?.alpha = alphaBg
+                    polylineFg?.outlinePaint?.alpha = alphaFg
+                    dirty = true
+                }
 
-                // Request redraw after any update
-                try { mv?.invalidate() } catch (_: Exception) {}
+                // Only request redraw if something actually changed
+                if (dirty) {
+                    try { mv?.invalidate() } catch (_: Exception) {}
+                }
             }
         )
 

@@ -21,7 +21,8 @@ class RelayClient {
     private val json = Json { ignoreUnknownKeys = true }
     private val httpClient = OkHttpClient.Builder()
         .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // BODY is too verbose for production — logs every WS message
+            level = HttpLoggingInterceptor.Level.NONE
         })
         .build()
 

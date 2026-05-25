@@ -44,10 +44,8 @@ fun MarcoScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val mapState by viewModel.mapState.collectAsState()
     var showDebug by remember { mutableStateOf(false) }
-
-    // Walking route from OSRM
-    val activeRoute = uiState.walkRoute
 
     // Start location foreground service (requires location permission already granted)
     fun startLocationService() {
@@ -124,8 +122,8 @@ fun MarcoScreen(
     } else {
         // Map renders once session is active and at least one of: own GPS has a fix
         // OR partner data has arrived. This prevents being stuck waiting for GPS indoors.
-        val hasAnyLocation = uiState.ownLat != null || uiState.hasPartnerLocation
-        val mapReady = uiState.isActive && hasAnyLocation
+        val hasAnyLocation = mapState.ownLat != null || mapState.hasPartnerLocation
+        val mapReady = mapState.isActive && hasAnyLocation
 
         Scaffold(
         topBar = {
@@ -193,7 +191,7 @@ fun MarcoScreen(
                 // ── Content crossfade: room → loading → map ──
                 val contentState = when {
                     mapReady -> "map"
-                    uiState.isActive -> "loading"
+                    mapState.isActive -> "loading"
                     else -> "room"
                 }
                 Crossfade(
@@ -204,15 +202,15 @@ fun MarcoScreen(
                         "map" -> Box(Modifier.fillMaxSize()) {
                             MarcoMap(
                                 modifier = Modifier.fillMaxSize(),
-                                ownLat = uiState.ownLat,
-                                ownLng = uiState.ownLng,
-                                ownBearing = uiState.ownBearing,
-                                partnerLat = uiState.partnerLat,
-                                partnerLng = uiState.partnerLng,
+                                ownLat = mapState.ownLat,
+                                ownLng = mapState.ownLng,
+                                ownBearing = mapState.ownBearing,
+                                partnerLat = mapState.partnerLat,
+                                partnerLng = mapState.partnerLng,
                                 partnerRole = "Polo",
-                                routeLatLngs = activeRoute?.geometry,
-                                distanceToTarget = uiState.partnerDistance,
-                                showCheckmark = uiState.showCheckmark,
+                                routeLatLngs = mapState.routeLatLngs,
+                                distanceToTarget = mapState.distanceToTarget,
+                                showCheckmark = mapState.showCheckmark,
                                 onCheckmarkClick = { viewModel.completeSession() }
                             )
 
@@ -254,9 +252,9 @@ fun MarcoScreen(
                                 strokeWidth = 4.dp
                             )
                             Spacer(modifier = Modifier.height(24.dp))
-                            val waitingMessage = if (uiState.ownLat == null && !uiState.hasPartnerLocation) {
+                            val waitingMessage = if (mapState.ownLat == null && !mapState.hasPartnerLocation) {
                                 "Acquiring GPS and waiting for Polo..."
-                            } else if (uiState.ownLat == null) {
+                            } else if (mapState.ownLat == null) {
                                 "Acquiring GPS..."
                             } else {
                                 "Waiting for Polo's location..."

@@ -37,7 +37,7 @@
 - `MarcoScreen.kt` — Marco UI with `Crossfade` three-state, distance threshold haptic, `LaunchedEffect { delay(1500); onFound() }` (no inline found dialog).
 - `PoloMapScreen.kt` — Polo UI same `Crossfade` + haptic + found-dialog delay as MarcoScreen.
 - `MarcoMap.kt` — osmdroid wrapper with markers (You 36dp, partner 36dp), polylines (fg 10px, bg 22px, BEVEL joins), follow-me, non-animated zoomToBoundingBox with try-catch, route polyline alpha animation (600ms tween), maxZoomLevel 19, minZoomLevel 15, bearing rounded to 5°, orientation delayed 2s, BitmapDrawable cached.
-- `LocationService.kt` — foreground service, FusedLocationProviderClient, compass via rotation sensor, `getLastLocation()` fallback, GPS 5s/1s, compass SENSOR_DELAY_UI (~60ms).
+- `LocationService.kt` — foreground service, FusedLocationProviderClient, compass via rotation sensor, `getLastLocation()` fallback, GPS 3s min interval, compass SENSOR_DELAY_NORMAL (200ms).
 - `PermissionsViewModel.kt` — PENDING/GRANTED/DENIED state machine for location permission
 - `HapticClick.kt` — `hapticClick()` composable wrapper for all 15 interactive buttons
 - `DebugOverlay.kt` — lightweight state debug panel (toggle via title tap)
