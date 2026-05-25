@@ -38,6 +38,9 @@ data class MarcoUiState(
     val showFoundDialog: Boolean = false,
     // Walking route calculated by Marco
     val walkRoute: RouteResult? = null,
+    // Raw partner coords (always set on receive, even before reveal)
+    val rawPartnerLat: Double? = null,
+    val rawPartnerLng: Double? = null,
     // Debug counters
     val sentCount: Int = 0
 )
@@ -137,10 +140,13 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Calculate walking route via OSRM when both locations known.
+     * Uses raw partner coords (pre-reveal) for faster route delivery.
      * Debounced: won't call more than once per 10s unless moved > 30m.
      * Sends the route to Polo over WebSocket.
+     *
+     * @param force if true, bypasses debounce (used on reveal transition)
      */
-    private fun requestRouteUpdate() {
+    private fun requestRouteUpdate(force: Boolean = false) {
         val state = _uiState.value
         val ownLat = state.ownLat ?: run {
             Log.d(TAG, "requestRouteUpdate: ownLat is null, skipping")
@@ -150,16 +156,21 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
             Log.d(TAG, "requestRouteUpdate: ownLng is null, skipping")
             return
         }
-        val partnerLat = state.partnerLat ?: run {
-            Log.d(TAG, "requestRouteUpdate: partnerLat is null (not revealed), skipping")
+        // Use raw partner coords for pre-reveal OSRM calculation
+        if (!state.hasPartnerLocation) {
+            Log.d(TAG, "requestRouteUpdate: no partner location yet, skipping")
             return
         }
-        val partnerLng = state.partnerLng ?: run {
-            Log.d(TAG, "requestRouteUpdate: partnerLng is null (not revealed), skipping")
+        val partnerLat = state.rawPartnerLat ?: run {
+            Log.d(TAG, "requestRouteUpdate: rawPartnerLat is null, skipping")
+            return
+        }
+        val partnerLng = state.rawPartnerLng ?: run {
+            Log.d(TAG, "requestRouteUpdate: rawPartnerLng is null, skipping")
             return
         }
 
-        Log.d(TAG, "requestRouteUpdate: own=$ownLat,$ownLng  partner=$partnerLat,$partnerLng")
+        Log.d(TAG, "requestRouteUpdate: own=$ownLat,$ownLng  partner=$partnerLat,$partnerLng  force=$force")
 
         // Debounce: check if enough time has passed OR if moved significantly
         val now = System.currentTimeMillis()
@@ -173,12 +184,12 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
         Log.d(TAG, "requestRouteUpdate: enoughTimePassed=$enoughTimePassed ownMoved=$ownMoved partnerMoved=$partnerMoved")
 
-        if (!enoughTimePassed && !ownMoved && !partnerMoved) {
+        if (!force && !enoughTimePassed && !ownMoved && !partnerMoved) {
             Log.d(TAG, "requestRouteUpdate: debounce skip")
             return
         }
 
-        // Update last known positions
+        // Update last known positions (using raw coords for partner)
         lastRouteOwnLat = ownLat
         lastRouteOwnLng = ownLng
         lastRoutePartnerLat = partnerLat
@@ -192,11 +203,12 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
             Log.d(TAG, "requestRouteUpdate: walkResult=${result != null}")
 
-            _uiState.update {
-                it.copy(walkRoute = result)
+            _uiState.update { state ->
+                // Only show route on Marco's map when partner is revealed
+                state.copy(walkRoute = if (state.partnerRevealed) result else null)
             }
 
-            // Send route to Polo
+            // Send route to Polo even when not revealed (Polo caches it)
             result?.let {
                 relayClient.sendRoute(it.geometry, it.distance, it.duration, "foot")
                 Log.d(TAG, "walk route sent to Polo (${it.geometry.size} pts)")
@@ -253,25 +265,24 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                     val wasFound = current.showFoundDialog
                                     val nowFound = dist != null && dist <= FOUND_THRESHOLD_M
                                     current.copy(
-                                        // Hide exact location until revealed (>10m) for privacy,
-                                        // but track that we received it so the map can render
+                                        // Always store raw coords for route calculation,
+                                        // but only reveal exact location when >10m (privacy)
+                                        rawPartnerLat = lat,
+                                        rawPartnerLng = lng,
                                         partnerLat = if (revealed) lat else null,
                                         partnerLng = if (revealed) lng else null,
                                         partnerDistance = dist,
                                         partnerRevealed = revealed,
                                         hasPartnerLocation = true,
-                                        // Clear both routes when unrevealed
+                                        // Clear walkRoute when unrevealed
                                         walkRoute = if (revealed) current.walkRoute else null,
                                         showFoundDialog = wasFound || nowFound
                                     )
                                 }
-                                // Only calculate route when revealed
-                                if (revealed) {
-                                    Log.d(TAG, "partner revealed, calling requestRouteUpdate")
-                                    requestRouteUpdate()
-                                } else {
-                                    Log.d(TAG, "partner NOT revealed, no route calc")
-                                }
+                                // Always request route calc using raw coords (pre-reveal caching)
+                                // Force immediate calculation when revealed
+                                Log.d(TAG, "requesting route update (revealed=$revealed)")
+                                requestRouteUpdate(force = revealed)
                             }
                         }
                     }

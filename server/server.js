@@ -9,14 +9,10 @@ const ROOM_EXPIRE_MS = 17 * 60 * 1000; // 17min (2min buffer over 15min session)
 const rooms = new Map(); // code → { marco: ws|null, polo: ws|null, createdAt }
 
 function generateCode() {
-  // 4 alphanumeric chars (0-9, A-Z) — no special characters
-  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  let code = "";
+  // 4-digit numeric code — easier to type on phones
   const bytes = crypto.randomBytes(4);
-  for (let i = 0; i < 4; i++) {
-    code += chars[bytes[i] % chars.length];
-  }
-  return code;
+  const num = bytes.readUInt32BE(0) % 10000;
+  return String(num).padStart(4, "0");
 }
 
 function cleanupExpiredRooms() {
@@ -58,7 +54,7 @@ const server = http.createServer((req, res) => {
   }
 
   // Deep-link redirect page: serves a clickable https:// URL that redirects to marcopolo://
-  const joinMatch = req.url.match(/^\/join\/([A-Za-z0-9]{4})$/);
+  const joinMatch = req.url.match(/^\/join\/([0-9]{4})$/);
   if (req.method === "GET" && joinMatch) {
     const code = joinMatch[1];
     const scheme = "marcopolo";

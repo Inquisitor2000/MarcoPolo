@@ -1,0 +1,46 @@
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/.idea/
+*.apk
+*.ap_
+*.dex
+*.class
+*.jar
+*.aar
+
+# Build cache
+*.bin
+*.tab
+*.tab_i
+*.tab.keystream
+*.tab.len
+*.tab.values
+*.tab.values.at
+*.tab.values.s
+last-build.bin
+build-history.bin
+shrunk-classpath-snapshot.bin
+executionHistory.bin
+executionHistory.lock
+fileHashes.bin
+fileHashes.lock
+resourceHashesCache.bin
+buildOutputCleanup.lock
+file-system.probe
+classes.jar
+redirect.txt
+deploymentTargetSelector.xml
+dexbuilderDebug
+manifest-merger-blame-debug-report.txt
+*.kotlin_module
+
+# OS
+.DS_Store
+
+# Server
+server/node_modules/
+
+# Other
+SKILL.md
+memory.md

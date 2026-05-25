@@ -37,6 +37,8 @@ data class PoloUiState(
     val showFoundDialog: Boolean = false,
     // Walking route received from Marco
     val walkRoute: RouteResult? = null,
+    // Pending route cached while partner not yet revealed
+    val pendingWalkRoute: RouteResult? = null,
     // Debug counters
     val sentCount: Int = 0
 )
@@ -163,8 +165,10 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                 Log.d(TAG, "partner distance=${dist}m  threshold=${REVEAL_THRESHOLD_M}m  revealed=$revealed")
 
                                 _uiState.update { current ->
+                                    val wasRevealed = current.partnerRevealed
                                     val wasFound = current.showFoundDialog
                                     val nowFound = dist != null && dist <= FOUND_THRESHOLD_M
+                                    val justRevealed = revealed && !wasRevealed
                                     current.copy(
                                         // Hide exact location until revealed (>10m) for privacy,
                                         // but track that we received it so the map can render
@@ -173,7 +177,15 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                         partnerDistance = dist,
                                         partnerRevealed = revealed,
                                         hasPartnerLocation = true,
-                                        walkRoute = if (revealed) current.walkRoute else null,
+                                        walkRoute = when {
+                                            justRevealed && current.pendingWalkRoute != null -> {
+                                                Log.d(TAG, "promoting cached route on reveal")
+                                                current.pendingWalkRoute
+                                            }
+                                            revealed -> current.walkRoute
+                                            else -> null
+                                        },
+                                        pendingWalkRoute = if (justRevealed) null else current.pendingWalkRoute,
                                         showFoundDialog = wasFound || nowFound
                                     )
                                 }
@@ -188,12 +200,16 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                 distance = msg.distance,
                                 duration = msg.duration
                             )
-                            val state = _uiState.value
-                            if (!state.partnerRevealed) {
-                                Log.d(TAG, "partner NOT revealed, route ignored")
-                                return@collect
+                            _uiState.update { current ->
+                                if (current.partnerRevealed) {
+                                    // Revealed: store directly on map
+                                    current.copy(walkRoute = route, pendingWalkRoute = route)
+                                } else {
+                                    // Not yet revealed: cache for later promotion
+                                    Log.d(TAG, "partner NOT revealed, route cached")
+                                    current.copy(pendingWalkRoute = route)
+                                }
                             }
-                            _uiState.update { it.copy(walkRoute = route) }
                             Log.d(TAG, "walk route stored for profile=${msg.profile}")
                         } else {
                             Log.d(TAG, "route msg missing fields, ignored")

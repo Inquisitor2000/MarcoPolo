@@ -63,7 +63,7 @@ fun PoloConfigScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Ask Marco for the 4-character code\nto start the session",
+                text = "Ask Marco for the 4-digit code\nto start the session",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center
@@ -73,7 +73,7 @@ fun PoloConfigScreen(
 
             OutlinedTextField(
                 value = code,
-                onValueChange = { code = it.filter { it.isLetterOrDigit() }.uppercase().take(4) },
+                onValueChange = { code = it.filter { it.isDigit() }.take(4) },
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = MaterialTheme.typography.headlineLarge.copy(
                     fontFamily = FontFamily.Monospace,
@@ -81,17 +81,17 @@ fun PoloConfigScreen(
                     textAlign = TextAlign.Center
                 ),
                 singleLine = true,
-                placeholder = {
-                    Text(
-                        text = "M7K2",
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                },
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    imeAction = ImeAction.Go
-                ),
+                    placeholder = {
+                        Text(
+                            text = "1234",
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        imeAction = ImeAction.Go
+                    ),
                 keyboardActions = KeyboardActions(
                     onGo = {
                         if (code.length == 4) {

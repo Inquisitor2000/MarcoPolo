@@ -49,6 +49,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 // Detailed tile source with building outlines, street names, and POI labels.
 // CartoDB Voyager — free for small-scale use with attribution.
@@ -61,6 +62,9 @@ private val HIGH_QUALITY_TILES: ITileSource = XYTileSource(
     )
 )
 
+
+// Re-zoom when bounding box diagonal changes by > ~30m (in degrees)
+private const val MIN_BBOX_CHANGE = 0.0003
 
 /**
  * osmdroid MapView wrapped as a Compose component.
@@ -88,6 +92,9 @@ fun MarcoMap(
 
     var youBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var partnerBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    // Cached drawables — avoid BitmapDrawable allocation on every update lambda run
+    var youDrawable by remember { mutableStateOf<android.graphics.drawable.BitmapDrawable?>(null) }
+    var partnerDrawable by remember { mutableStateOf<android.graphics.drawable.BitmapDrawable?>(null) }
 
     // ── Change-detection state (suppress redundant map operations) ──
     var prevOwnLat by remember { mutableStateOf(Double.NaN) }
@@ -97,6 +104,10 @@ fun MarcoMap(
     var prevOrientation by remember { mutableStateOf(-1f) }
     var prevRouteKey by remember { mutableStateOf("") }
     var bboxDone by remember { mutableStateOf(false) }
+    // Dynamic bbox re-zoom — re-adjust when follow-me is on and distance changes significantly
+    var prevBboxDiagonal by remember { mutableStateOf(0.0) }
+    // Trigger to zoom from a LaunchedEffect (post-layout) instead of from the update lambda
+    var bboxZoomTrigger by remember { mutableIntStateOf(0) }
 
     // ── Follow-me toggle: auto-center on own position ──
     var followMe by remember { mutableStateOf(true) }
@@ -104,15 +115,30 @@ fun MarcoMap(
 
     // ── Smooth map orientation animation ──
     val mapOrientation = remember { Animatable(0f) }
-    // Round bearing to whole degrees to damp noisy GPS heading
+    // Round bearing to nearest 5° to damp compass noise — reduces
+    // LaunchedEffect restarts from ~16Hz to ~1-2Hz on foot.
     val targetOrientation = remember(ownBearing) {
-        -(Math.round(ownBearing ?: 0f)).toFloat()
+        val b = ownBearing ?: 0f
+        -(Math.round(b / 5f) * 5f).toFloat()
     }
-    LaunchedEffect(targetOrientation) {
-        mapOrientation.animateTo(
-            targetOrientation,
-            animationSpec = tween(durationMillis = 350, easing = LinearEasing)
-        )
+    // Delay orientation animation until map tiles settle (~2s).
+    // Prevents startup CPU burst: compass + map init + tile loading
+    // all competing on Honor 20's Mali-G76.
+    var orientationSettled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(2000L)
+        orientationSettled = true
+    }
+    LaunchedEffect(targetOrientation, orientationSettled) {
+        if (orientationSettled) {
+            mapOrientation.animateTo(
+                targetOrientation,
+                animationSpec = tween(durationMillis = 350, easing = LinearEasing)
+            )
+        } else {
+            // Before settling, snap to latest bearing (no animation surge)
+            mapOrientation.snapTo(targetOrientation)
+        }
     }
 
     // Show spinner until map tiles start loading
@@ -120,6 +146,55 @@ fun MarcoMap(
     LaunchedEffect(Unit) {
         delay(800L)
         mapReady = true
+    }
+
+    // ── Zoom-to-fit: runs AFTER layout (not in update lambda) so MapView has proper dimensions ──
+    var scrollableAreaSet by remember { mutableStateOf(false) }
+    LaunchedEffect(bboxZoomTrigger) {
+        if (bboxZoomTrigger > 0) {
+            val mv = mapView.value ?: return@LaunchedEffect
+            // Skip if MapView hasn't been laid out yet — prevents
+            // invalid zoom calculation on slow devices (Honor 20).
+            if (mv.width <= 0 || mv.height <= 0) return@LaunchedEffect
+            val oLat = ownLat ?: return@LaunchedEffect
+            val oLng = ownLng ?: return@LaunchedEffect
+            val pLat = partnerLat ?: return@LaunchedEffect
+            val pLng = partnerLng ?: return@LaunchedEffect
+            // Constrain viewport on first zoom so osmdroid doesn't load tiles
+            // for the whole planet — only the meeting area matters.
+            if (!scrollableAreaSet) {
+                scrollableAreaSet = true
+                val margin = 0.5  // ~55km padding — room to pan
+                mv.setScrollableAreaLimitDouble(
+                    org.osmdroid.util.BoundingBox(
+                        maxOf(oLat, pLat) + margin,
+                        maxOf(oLng, pLng) + margin,
+                        minOf(oLat, pLat) - margin,
+                        minOf(oLng, pLng) - margin
+                    )
+                )
+            }
+            val hasRoute = routeLatLngs != null && routeLatLngs.size >= 2
+            val pad = if (hasRoute) 0.0003 else 0.001
+            val north = maxOf(oLat, pLat)
+            val south = minOf(oLat, pLat)
+            val east = maxOf(oLng, pLng)
+            val west = minOf(oLng, pLng)
+            try {
+                // Non-animated zoom — animated zoom on osmdroid can crash
+                // on Mali-G76 when the view is still initializing.
+                mv.zoomToBoundingBox(
+                    org.osmdroid.util.BoundingBox(
+                        north + pad, east + pad,
+                        south - pad, west - pad
+                    ),
+                    false, 0
+                )
+            } catch (_: Exception) {
+                // Non-critical — route polyline still visible at default zoom.
+                // Catch to prevent crash on slow GPU / initializing MapView.
+            }
+        }
     }
 
     // Manage osmdroid lifecycle
@@ -147,10 +222,13 @@ fun MarcoMap(
                 MapView(ctx).apply {
                     setTileSource(HIGH_QUALITY_TILES)
                     setMultiTouchControls(true)
+                    // Force software rendering to avoid Mali GPU driver hangs
+                    // on Honor 20 / other devices with GPU issues in Canvas 2D rendering.
+                    setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
                     zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-                    minZoomLevel = 15.0  // ~4–5km view — allows one zoom-out from default
-                    maxZoomLevel = 19.0
-                    controller.setZoom(17.0)
+                    minZoomLevel = 15.0  // ~4–5km view — gentle starting zoom
+                    maxZoomLevel = 18.0  // limit tile count on low-end devices
+                    controller.setZoom(16.0)  // moderate initial zoom, smoothed by bbox animation when data arrives
 
                     // Scale tiles for retina/high-DPI screens (crisp text & details)
                     val density = ctx.resources.displayMetrics.density
@@ -164,6 +242,8 @@ fun MarcoMap(
 
                     youBitmap = createYouBitmap(ctx, 36)
                     partnerBitmap = createPartnerBitmap(ctx, 36, partnerRole)
+                    youDrawable = youBitmap?.let { BitmapDrawable(ctx.resources, it) }
+                    partnerDrawable = partnerBitmap?.let { BitmapDrawable(ctx.resources, it) }
 
                     // ── Polyline background (glow) ──
                     polylineBg = Polyline().apply {
@@ -171,7 +251,7 @@ fun MarcoMap(
                         outlinePaint.strokeWidth = 22f
                         outlinePaint.isAntiAlias = true
                         outlinePaint.strokeCap = Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = Paint.Join.ROUND
+                        outlinePaint.strokeJoin = Paint.Join.BEVEL
                     }
                     overlays.add(polylineBg)
 
@@ -181,7 +261,7 @@ fun MarcoMap(
                         outlinePaint.strokeWidth = 10f
                         outlinePaint.isAntiAlias = true
                         outlinePaint.strokeCap = Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = Paint.Join.ROUND
+                        outlinePaint.strokeJoin = Paint.Join.BEVEL
                     }
                     overlays.add(polylineFg)
 
@@ -225,7 +305,7 @@ fun MarcoMap(
                     }
                 }
             },
-            update = { ctx ->
+            update = { _ ->
                 val mv = mapView.value
                 var dirty = false
 
@@ -234,7 +314,7 @@ fun MarcoMap(
                     youMarker?.apply {
                         position = GeoPoint(ownLat, ownLng)
                         isEnabled = true
-                        icon = youBitmap?.let { BitmapDrawable(ctx.resources, it) }
+                        icon = youDrawable
                         rotation = -(ownBearing ?: 0f)
                     }
                 } else {
@@ -270,7 +350,7 @@ fun MarcoMap(
                             position = GeoPoint(partnerLat, partnerLng)
                             isEnabled = true
                             title = partnerRole
-                            icon = partnerBitmap?.let { BitmapDrawable(ctx.resources, it) }
+                            icon = partnerDrawable
                         }
                         prevPartnerLat = partnerLat
                         prevPartnerLng = partnerLng
@@ -306,20 +386,25 @@ fun MarcoMap(
                         polylineBg?.apply { setPoints(points); isVisible = true }
                         polylineFg?.apply { setPoints(points); isVisible = true }
 
-                        // Zoom to fit both — only once, never again (avoids fighting user pans)
-                        if (!bboxDone) {
+                        // Dynamic zoom-to-fit. Re-zooms when follow-me is on and
+                        // the bounding box diagonal changes significantly.
+                        // Capped by minZoomLevel (15.0) — never zooms out too far.
+                        val north = maxOf(oLat, pLat)
+                        val south = minOf(oLat, pLat)
+                        val east = maxOf(oLng, pLng)
+                        val west = minOf(oLng, pLng)
+                        val diagLat = north - south
+                        val diagLng = east - west
+                        val diagonal = sqrt(diagLat * diagLat + diagLng * diagLng)
+                        val shouldReZoom = if (followMe) {
+                            !bboxDone || abs(diagonal - prevBboxDiagonal) > MIN_BBOX_CHANGE
+                        } else {
+                            false
+                        }
+                        if (shouldReZoom) {
+                            prevBboxDiagonal = diagonal
                             bboxDone = true
-                            val north = maxOf(oLat, pLat)
-                            val south = minOf(oLat, pLat)
-                            val east = maxOf(oLng, pLng)
-                            val west = minOf(oLng, pLng)
-                            mv.zoomToBoundingBox(
-                                org.osmdroid.util.BoundingBox(
-                                    north + 0.001, east + 0.001,
-                                    south - 0.001, west - 0.001
-                                ),
-                                true, 80
-                            )
+                            bboxZoomTrigger++  // trigger post-layout zoom via LaunchedEffect
                         }
                     } else {
                         polylineBg?.isVisible = false
@@ -329,7 +414,9 @@ fun MarcoMap(
                     dirty = true
                 }
 
-                if (dirty) mv?.invalidate()
+                if (dirty) {
+                    try { mv?.invalidate() } catch (_: Exception) {}
+                }
             }
         )
 

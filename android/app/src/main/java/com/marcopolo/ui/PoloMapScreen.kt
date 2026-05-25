@@ -72,13 +72,14 @@ fun PoloMapScreen(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         if (!hasFine) {
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.POST_NOTIFICATIONS
-                )
+            val permissionsToRequest = mutableListOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
             )
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            locationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         } else {
             startLocationService()
             viewModel.onPermissionsGranted()
@@ -106,13 +107,14 @@ fun PoloMapScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(onClick = hapticClick {
-                    locationPermissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                            Manifest.permission.POST_NOTIFICATIONS
-                        )
+                    val permissionsToRequest2 = mutableListOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
                     )
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        permissionsToRequest2.add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    locationPermissionLauncher.launch(permissionsToRequest2.toTypedArray())
                 }) {
                     Text("Grant Permission")
                 }
@@ -350,7 +352,8 @@ fun PoloMapScreen(
                         Spacer(modifier = Modifier.height(28.dp))
                         Button(
                             onClick = {
-                                viewModel.dismissFoundDialog()
+                                viewModel.cleanup()
+                                onBack()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()

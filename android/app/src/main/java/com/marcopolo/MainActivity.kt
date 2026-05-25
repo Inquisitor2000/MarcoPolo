@@ -27,12 +27,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize osmdroid configuration
+        // Initialize osmdroid configuration (conservative for low-end devices)
         org.osmdroid.config.Configuration.getInstance().apply {
             userAgentValue = packageName
-            tileFileSystemCacheMaxBytes = 50L * 1024 * 1024  // 50MB cache for smoother panning
-            tileFileSystemCacheTrimBytes = 30L * 1024 * 1024
-            tileDownloadThreads = 4                          // parallel tile downloads
+            // Small cache = less disk I/O + less memory pressure on low-RAM devices.
+            tileFileSystemCacheMaxBytes = 25L * 1024 * 1024   // 25MB — covers full session + cross-session reuse
+            tileFileSystemCacheTrimBytes = 20L * 1024 * 1024  // trim to 20MB when limit hit
+            // Fewer download threads = less CPU contention on single-core devices.
+            tileDownloadThreads = 2                            // was 4
         }
 
         // Check if launched from a deep link (cold start)
@@ -66,7 +68,7 @@ class MainActivity : ComponentActivity() {
         val path = uri.path ?: return null
 
         // Only allow /join/{CODE} paths
-        val match = Regex("^/join/([A-Za-z0-9]{4})$").find(path)
+        val match = Regex("^/join/([0-9]{4})$").find(path)
         val code = match?.groupValues?.getOrNull(1)
         return if (code != null) code else null
     }
