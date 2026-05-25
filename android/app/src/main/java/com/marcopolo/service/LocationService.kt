@@ -33,6 +33,18 @@ class LocationService : Service(), SensorEventListener {
         private val _compassHeading = MutableStateFlow<Float?>(null)
         val compassHeading: StateFlow<Float?> = _compassHeading.asStateFlow()
 
+        /** When true, the next onStartCommand will skip fusedLocationClient.lastLocation
+         *  to avoid seeding a fresh session with stale GPS from a previous session. */
+        private var skipLastLocation = false
+
+        /** Clears the cached location and sets a flag to skip the system last-location
+         *  fetch on the next service start. Call after a session ends (found or disconnect)
+         *  so the next session builds location fresh from GPS. */
+        fun clearCache() {
+            _currentLocation.value = null
+            skipLastLocation = true
+        }
+
         private const val CHANNEL_ID = "marcopolo_location"
         private const val NOTIFICATION_ID = 1001
     }
@@ -80,13 +92,16 @@ class LocationService : Service(), SensorEventListener {
                 mainLooper
             )
 
-            // Immediately fetch last known location (usually cached from other apps)
-            // so the UI doesn't block waiting for first GPS fix.
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null && _currentLocation.value == null) {
-                    _currentLocation.value = location
+            // Fetch last known location so the UI doesn't block waiting for first GPS fix.
+            // Skip this after a session end (clearCache was called) to avoid stale data.
+            if (!skipLastLocation) {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    if (location != null && _currentLocation.value == null) {
+                        _currentLocation.value = location
+                    }
                 }
             }
+            skipLastLocation = false
         } catch (e: SecurityException) {
             // Location permission not granted
             stopSelf()

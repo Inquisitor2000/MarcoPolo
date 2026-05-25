@@ -102,6 +102,15 @@ class RelayClient {
      * Only Marco calls this — Polo receives and renders.
      * @param profile travel mode profile string ("foot" | "driving")
      */
+    /**
+     * Notify the partner that this user has marked the session as complete.
+     * Both sides display the congratulations dialog.
+     */
+    fun sendSessionComplete() {
+        val msg = WsMessage(type = "session_complete")
+        webSocket?.send(json.encodeToString(WsMessage.serializer(), msg))
+    }
+
     fun sendRoute(geometry: List<List<Double>>, distance: Double, duration: Double, profile: String = "foot") {
         val msg = WsMessage(
             type = "route",

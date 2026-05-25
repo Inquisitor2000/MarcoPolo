@@ -211,7 +211,9 @@ fun MarcoScreen(
                                 partnerLng = uiState.partnerLng,
                                 partnerRole = "Polo",
                                 routeLatLngs = activeRoute?.geometry,
-                                distanceToTarget = uiState.partnerDistance
+                                distanceToTarget = uiState.partnerDistance,
+                                showCheckmark = uiState.showCheckmark,
+                                onCheckmarkClick = { viewModel.completeSession() }
                             )
 
                             // ── Info panel overlaid on map ──

@@ -36,6 +36,9 @@ data class PoloUiState(
     val showDisconnectDialog: Boolean = false,
     // Found dialog
     val showFoundDialog: Boolean = false,
+    // Minimum system time (ms) before found dialog can fire.
+    // Gives GPS positions ~20s to settle after session activation.
+    val foundDialogEnabledAtMs: Long = 0L,
     // Walking route received from Marco (or calculated locally)
     val walkRoute: RouteResult? = null,
     // Pending route cached while partner not yet revealed
@@ -43,6 +46,8 @@ data class PoloUiState(
     // Raw partner coords (always set on receive, even before reveal)
     val rawPartnerLat: Double? = null,
     val rawPartnerLng: Double? = null,
+    // Green checkmark (manual found when ≤30m)
+    val showCheckmark: Boolean = false,
     // Debug counters
     val sentCount: Int = 0
 )
@@ -70,6 +75,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
         private const val ROUTE_MOVEMENT_THRESHOLD_M = 30f   // Recalculate only if moved > 30m
         private const val REVEAL_THRESHOLD_M = 10
         private const val FOUND_THRESHOLD_M = 15
+        private const val CHECKMARK_THRESHOLD_M = 30
     }
 
     /**
@@ -148,7 +154,12 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
             relayClient.messages.collect { msg ->
                 when (msg.type) {
                     "partner_joined" -> {
-                        _uiState.update { it.copy(isActive = true) }
+                        _uiState.update {
+                            it.copy(
+                                isActive = true,
+                                foundDialogEnabledAtMs = System.currentTimeMillis() + 20_000
+                            )
+                        }
                         startCountdown()
                         onLocationReady()
                     }
@@ -189,8 +200,11 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                 _uiState.update { current ->
                                     val wasRevealed = current.partnerRevealed
                                     val wasFound = current.showFoundDialog
-                                    val nowFound = dist != null && dist <= FOUND_THRESHOLD_M
+                                    val timeOk = System.currentTimeMillis() >= current.foundDialogEnabledAtMs
+                                    val nowFound = dist != null && dist <= FOUND_THRESHOLD_M && timeOk
                                     val justRevealed = revealed && !wasRevealed
+                                    // Show green checkmark when partner is ≤30m but auto-found hasn't triggered yet
+                                    val checkmarkVisible = dist != null && dist <= CHECKMARK_THRESHOLD_M && !wasFound && !nowFound
                                     current.copy(
                                         // Always store raw coords for route calculation,
                                         // but only reveal exact location when >10m (privacy)
@@ -201,6 +215,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                         partnerDistance = dist,
                                         partnerRevealed = revealed,
                                         hasPartnerLocation = true,
+                                        showCheckmark = checkmarkVisible,
                                         walkRoute = when {
                                             justRevealed && current.pendingWalkRoute != null -> {
                                                 Log.d(TAG, "promoting cached route on reveal")
@@ -221,6 +236,10 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                     }
+                    "session_complete" -> {
+                        // Partner manually marked session as complete
+                        _uiState.update { it.copy(showFoundDialog = true) }
+                    }
                     "route" -> {
                         Log.d(TAG, "rcvd route msg: profile=${msg.profile}  geometry=${msg.geometry?.size}pts  dist=${msg.distance}m")
                         if (msg.geometry != null && msg.distance != null && msg.duration != null) {
@@ -231,8 +250,14 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                             )
                             _uiState.update { current ->
                                 if (current.partnerRevealed) {
-                                    // Revealed: store directly on map
-                                    current.copy(walkRoute = route, pendingWalkRoute = route)
+                                    // Avoid route flipping: only accept if strictly shorter
+                                    // than what we already display (GPS jitter → different paths)
+                                    val best = when {
+                                        current.walkRoute == null -> route
+                                        route.distance < current.walkRoute.distance -> route
+                                        else -> current.walkRoute
+                                    }
+                                    current.copy(walkRoute = best, pendingWalkRoute = route)
                                 } else {
                                     // Not yet revealed: cache for later promotion
                                     Log.d(TAG, "partner NOT revealed, route cached")
@@ -260,6 +285,13 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                 if (seconds <= 0) cleanup()
             }
         }
+    }
+
+    /** Manually mark the session as complete. Sends notification to partner
+     *  and triggers the congratulations dialog on both sides. */
+    fun completeSession() {
+        _uiState.update { it.copy(showFoundDialog = true) }
+        relayClient.sendSessionComplete()
     }
 
     fun dismissFoundDialog() {
@@ -330,9 +362,21 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
             Log.d(TAG, "requestRouteUpdate: walkResult=${result != null}")
 
             _uiState.update { state ->
-                // Only show route on map when partner is revealed
+                // Avoid route flipping: only accept new route if it's strictly
+                // shorter than the current one (GPS jitter can produce slightly
+                // different paths for the same position).
+                val bestWalk = if (state.partnerRevealed) {
+                    when {
+                        result == null -> null
+                        state.walkRoute == null -> result
+                        result.distance < state.walkRoute.distance -> result
+                        else -> state.walkRoute
+                    }
+                } else {
+                    state.walkRoute
+                }
                 state.copy(
-                    walkRoute = if (state.partnerRevealed) result else state.walkRoute,
+                    walkRoute = bestWalk,
                     pendingWalkRoute = result ?: state.pendingWalkRoute
                 )
             }
@@ -344,6 +388,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
         locationJob?.cancel()
         routeJob?.cancel()
         relayClient.disconnect()
+        LocationService.clearCache()
         getApplication<Application>().stopService(
             Intent(getApplication(), LocationService::class.java)
         )

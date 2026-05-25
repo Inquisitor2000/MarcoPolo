@@ -20,9 +20,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.animateFloatAsState
@@ -84,7 +87,9 @@ fun MarcoMap(
     partnerLng: Double?,
     partnerRole: String = "Partner",
     routeLatLngs: List<List<Double>>? = null,
-    distanceToTarget: Double? = null     // straight-line meters to partner
+    distanceToTarget: Double? = null,   // straight-line meters to partner
+    showCheckmark: Boolean = false,     // green ✓ button when partner ≤30m
+    onCheckmarkClick: (() -> Unit)? = null
 ) {
     val mapView = remember { mutableStateOf<MapView?>(null) }
     var youMarker by remember { mutableStateOf<Marker?>(null) }
@@ -465,7 +470,26 @@ fun MarcoMap(
                 .padding(end = 10.dp, bottom = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Center-me / follow-me button (top)
+            // Green checkmark — manual found when partner ≤30m
+            if (showCheckmark) {
+                FloatingActionButton(
+                    onClick = hapticClick { onCheckmarkClick?.invoke() },
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                    containerColor = ComposeColor(0xFF4CAF50),
+                    contentColor = ComposeColor.White,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Mark as found",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Center-me / follow-me button
             FloatingActionButton(
                 onClick = hapticClick {
                     followMe = !followMe

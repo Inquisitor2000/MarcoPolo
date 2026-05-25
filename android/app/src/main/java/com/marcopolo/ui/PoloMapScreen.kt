@@ -206,43 +206,45 @@ fun PoloMapScreen(
             ) { state ->
                 when (state) {
                     "map" -> Box(Modifier.fillMaxSize()) {
-                        MarcoMap(
-                            modifier = Modifier.fillMaxSize(),
-                            ownLat = uiState.ownLat,
-                            ownLng = uiState.ownLng,
-                            ownBearing = uiState.ownBearing,
-                            partnerLat = uiState.partnerLat,
-                            partnerLng = uiState.partnerLng,
-                            partnerRole = "Marco",
-                            routeLatLngs = activeRoute?.geometry,
-                            distanceToTarget = uiState.partnerDistance
-                        )
+                            MarcoMap(
+                                modifier = Modifier.fillMaxSize(),
+                                ownLat = uiState.ownLat,
+                                ownLng = uiState.ownLng,
+                                ownBearing = uiState.ownBearing,
+                                partnerLat = uiState.partnerLat,
+                                partnerLng = uiState.partnerLng,
+                                partnerRole = "Marco",
+                                routeLatLngs = activeRoute?.geometry,
+                                distanceToTarget = uiState.partnerDistance,
+                                showCheckmark = uiState.showCheckmark,
+                                onCheckmarkClick = { viewModel.completeSession() }
+                            )
 
-                        // ── Info panel overlaid on map ──
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            if (uiState.error != null) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.errorContainer
-                                    )
-                                ) {
-                                    Text(
-                                        text = uiState.error!!,
-                                        modifier = Modifier.padding(16.dp),
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
+                            // ── Info panel overlaid on map ──
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                if (uiState.error != null) {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer
+                                        )
+                                    ) {
+                                        Text(
+                                            text = uiState.error!!,
+                                            modifier = Modifier.padding(16.dp),
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
                     "loading" -> Column(
                         modifier = Modifier
                             .fillMaxSize()

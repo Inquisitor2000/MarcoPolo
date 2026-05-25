@@ -6,6 +6,7 @@
 - **Route delivered but dropped** (FIXED). Marco sends route → Polo's GPS shows <10m (not revealed) → route discarded silently. Polo then waits for next Marco recalc cycle (5-15s). Fix: `pendingWalkRoute` caches route on Polo, promotes instantly on reveal transition.
 - **Polo calculates routes independently** (FIXED). Polo no longer waits for Marco to send route over WebSocket — both sides call OSRM directly. `PoloUiState` has `rawPartnerLat/Lng` always stored on receive, same `requestRouteUpdate()` with debounce as Marco.
 - **bboxDone single-shot zoom** (FIXED). Map only zoomed to fit once on first render. Walking further from partner → marker off-screen permanently. Fix: dynamic re-zoom when `followMe` is on and diagonal changes > 30m (`MIN_BBOX_CHANGE`). `minZoomLevel=15.0` caps max zoom-out.
+- **Route path flipping between alternatives** (FIXED). OSRM returned slightly different paths on each recalculation due to GPS coordinate jitter, causing the route polyline to visually jump between near-equivalent routes. Fix: in both ViewModels' `requestRouteUpdate`, only accept a new route if its distance is strictly shorter than the currently displayed route's distance. First route always accepted. This keeps the shortest path seen so far.
 - **POST_NOTIFICATIONS on Android 10** (FIXED). Permission `POST_NOTIFICATIONS` (API 33+) requested unconditionally on Android 10 (API 29) where it doesn't exist. Fix: guarded behind `Build.VERSION.SDK_INT >= TIRAMISU` in both screens.
 - **zoomToBoundingBox in update lambda freeze** (FIXED). Called during Compose layout phase before MapView has dimensions → potentially invalid calculation + main thread block on slower hardware. Fix: moved to `LaunchedEffect(bboxZoomTrigger)` that runs post-layout. Further crash fix: non-animated zoom + width/height guard + try-catch for Mali-G76 software layer.
 - **Honor 20 freeze + crash** (FIXED). Three separate issues:
@@ -16,6 +17,9 @@
 - **GPS asymmetry** (KNOWN). Marco and Polo get GPS fixes at different times. Marco may see 11m (revealed), Polo sees 9.5m (not revealed). Causes asymmetric reveal states. Polo's `pendingWalkRoute` cache bridges this window.
 - **Found dialog race condition** (FIXED). `partner_disconnected` WebSocket message arriving during the found window would override the found state and show disconnect dialog instead. Fix: disconnect handler in both ViewModels checks `current.showFoundDialog` and returns unchanged if already found. Location handler clears `showDisconnectDialog` + `error` when found triggers.
 - **1.5s grace delay** (FIXED). Both screens have `LaunchedEffect(Unit) { delay(1500); onFound() }` — gives both sides time to sync found state via WebSocket before navigating home and cleaning up. Without this, one side could navigate before the other processes the found message.
+- **Premature found popup when starting close** (FIXED). If devices started ≤15m apart, distance was immediately ≤ FOUND_THRESHOLD_M → found dialog fired before users could walk towards each other. Fix: `foundDialogEnabledAtMs` in both UI states — set to `currentTimeMillis + 20s` when `partner_joined` activates the session. `nowFound` requires `System.currentTimeMillis() >= foundDialogEnabledAtMs`, giving GPS ~20s to settle before the found check activates.
+- **Stale last-location cache on new session** (FIXED). After session end (found/disconnect), `stopService()` cleared `_currentLocation`. But next session's `fusedLocationClient.lastLocation` immediately returned the system's stale cached GPS. Fix: `LocationService.clearCache()` sets `skipLastLocation` flag — `onStartCommand` skips the stale fetch. Called from both ViewModels' `cleanup()`.
+- **Green checkmark manual found** (FIXED). Added `CHECKMARK_THRESHOLD_M = 30` — green ✓ button appears at top of bottom-right control column when partner ≤30m but auto-found hasn't triggered. Tapping sends `session_complete` via WebSocket; both sides show congratulations dialog.
 - **LSP false positives**: All `UNRESOLVED_REFERENCE` for Android/Kotlin SDK types are from missing Android SDK indexing, not real compile errors.
 
 ## Architecture
@@ -39,8 +43,8 @@
 - `DebugOverlay.kt` — lightweight state debug panel (toggle via title tap)
 - `HomeScreen.kt` — permission gate + role selection + found dialog rendering
 - `MainActivity.kt` — osmdroid init (cache 25MB, threads 2), deep link support, `MarcoPoloNavGraph` with shared `foundDialogShown` state + `onFound` lambda
-- `RelayClient.kt` — OkHttp WebSocket, createRoom/connect/sendLocation/sendRoute
-- `server/server.js` — `generateCode()` → numeric-only `[0-9]{4}`, deep link regex
+- `RelayClient.kt` — OkHttp WebSocket, createRoom/connect/sendLocation/sendRoute/sendSessionComplete
+- `server/server.js` — `generateCode()` → numeric-only `[0-9]{4}`, deep link regex, forwards `session_complete` to partner
 
 ## UI State Machine
 Three states per screen (once permissions granted):
@@ -53,7 +57,9 @@ Three states per screen (once permissions granted):
 ## Reveal / Found Logic
 - `REVEAL_THRESHOLD_M = 10`: partner coords hidden until dist > 10m (privacy)
 - `FOUND_THRESHOLD_M = 15`: "found partner" dialog triggers when dist ≤ 15m
+- `CHECKMARK_THRESHOLD_M = 30`: green ✓ button appears at bottom-right when dist ≤ 30m but auto-found hasn't triggered
 - `partnerLat/lng` stored as null when not revealed; `hasPartnerLocation` always set true on receive
 - Reveal controls: marker visibility + route display (not raw coordinate storage)
 - `rawPartnerLat/Lng` (both sides) always stored on receive, used for pre-reveal OSRM calls
 - `pendingWalkRoute` (Polo) caches received routes when partner not revealed, promoted to `walkRoute` on reveal transition
+- `foundDialogEnabledAtMs` set to `currentTimeMillis + 20s` on `partner_joined`. Found dialog suppressed until time elapses.

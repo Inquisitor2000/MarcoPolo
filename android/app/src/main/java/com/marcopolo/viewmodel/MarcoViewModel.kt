@@ -36,11 +36,16 @@ data class MarcoUiState(
     val showDisconnectDialog: Boolean = false,
     // Found dialog
     val showFoundDialog: Boolean = false,
+    // Minimum system time (ms) before found dialog can fire.
+    // Gives GPS positions ~20s to settle after session activation.
+    val foundDialogEnabledAtMs: Long = 0L,
     // Walking route calculated by Marco
     val walkRoute: RouteResult? = null,
     // Raw partner coords (always set on receive, even before reveal)
     val rawPartnerLat: Double? = null,
     val rawPartnerLng: Double? = null,
+    // Green checkmark (manual found when ≤30m)
+    val showCheckmark: Boolean = false,
     // Debug counters
     val sentCount: Int = 0
 )
@@ -68,6 +73,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         private const val ROUTE_MOVEMENT_THRESHOLD_M = 30f   // Recalculate only if moved > 30m
         private const val REVEAL_THRESHOLD_M = 10
         private const val FOUND_THRESHOLD_M = 15
+        private const val CHECKMARK_THRESHOLD_M = 30
     }
 
     /**
@@ -203,13 +209,27 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
             Log.d(TAG, "requestRouteUpdate: walkResult=${result != null}")
 
-            _uiState.update { state ->
-                // Only show route on Marco's map when partner is revealed
-                state.copy(walkRoute = if (state.partnerRevealed) result else null)
+            // Pick the best route to keep: reject any that aren't strictly shorter
+            // than the currently displayed route. This prevents visual flipping
+            // between near-equivalent paths from GPS jitter.
+            val keptRoute = if (result == null) null else {
+                val currentWalkRoute = _uiState.value.walkRoute
+                if (currentWalkRoute == null || result.distance < currentWalkRoute.distance) result
+                else currentWalkRoute
             }
 
-            // Send route to Polo even when not revealed (Polo caches it)
-            result?.let {
+            _uiState.update { state ->
+                if (state.partnerRevealed) {
+                    state.copy(walkRoute = keptRoute)
+                } else {
+                    state.copy(walkRoute = null)
+                }
+            }
+
+            // Send route to Polo even when not revealed (Polo caches it).
+            // Send keptRoute (what we're displaying) not raw result, so Polo
+            // doesn't flip to routes we already rejected.
+            keptRoute?.let {
                 relayClient.sendRoute(it.geometry, it.distance, it.duration, "foot")
                 Log.d(TAG, "walk route sent to Polo (${it.geometry.size} pts)")
             }
@@ -228,7 +248,12 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
             relayClient.messages.collect { msg ->
                 when (msg.type) {
                     "partner_joined" -> {
-                        _uiState.update { it.copy(isActive = true) }
+                        _uiState.update {
+                            it.copy(
+                                isActive = true,
+                                foundDialogEnabledAtMs = System.currentTimeMillis() + 20_000
+                            )
+                        }
                         startCountdown()
                         onLocationReady()
                     }
@@ -269,7 +294,10 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
                                 _uiState.update { current ->
                                     val wasFound = current.showFoundDialog
-                                    val nowFound = dist != null && dist <= FOUND_THRESHOLD_M
+                                    val timeOk = System.currentTimeMillis() >= current.foundDialogEnabledAtMs
+                                    val nowFound = dist != null && dist <= FOUND_THRESHOLD_M && timeOk
+                                    // Show green checkmark when partner is ≤30m but auto-found hasn't triggered yet
+                                    val checkmarkVisible = dist != null && dist <= CHECKMARK_THRESHOLD_M && !wasFound && !nowFound
                                     current.copy(
                                         // Always store raw coords for route calculation,
                                         // but only reveal exact location when >10m (privacy)
@@ -280,6 +308,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                         partnerDistance = dist,
                                         partnerRevealed = revealed,
                                         hasPartnerLocation = true,
+                                        showCheckmark = checkmarkVisible,
                                         // Clear walkRoute when unrevealed
                                         walkRoute = if (revealed) current.walkRoute else null,
                                         showFoundDialog = wasFound || nowFound,
@@ -294,6 +323,10 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                 requestRouteUpdate(force = revealed)
                             }
                         }
+                    }
+                    "session_complete" -> {
+                        // Partner manually marked session as complete
+                        _uiState.update { it.copy(showFoundDialog = true) }
                     }
                     "error" -> {
                         _uiState.update { it.copy(error = "Connection error") }
@@ -315,6 +348,13 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Manually mark the session as complete. Sends notification to partner
+     *  and triggers the congratulations dialog on both sides. */
+    fun completeSession() {
+        _uiState.update { it.copy(showFoundDialog = true) }
+        relayClient.sendSessionComplete()
+    }
+
     fun dismissFoundDialog() {
         _uiState.update { it.copy(showFoundDialog = false) }
     }
@@ -324,6 +364,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         locationJob?.cancel()
         routeJob?.cancel()
         relayClient.disconnect()
+        LocationService.clearCache()
         getApplication<Application>().stopService(
             Intent(getApplication(), LocationService::class.java)
         )

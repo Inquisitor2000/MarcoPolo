@@ -167,8 +167,8 @@ server.on("upgrade", (req, socket, head) => {
       const role = ws.role || "unknown";
       console.log(`[msg] ${role} in room ${code}: type=${msg.type}`);
 
-      // Forward location and route messages to partner
-      if (msg.type === "location" || msg.type === "route") {
+      // Forward location, route, and session_complete messages to partner
+      if (msg.type === "location" || msg.type === "route" || msg.type === "session_complete") {
         const target = ws === room.marco ? room.polo : room.marco;
         if (target && target.readyState === ws.OPEN) {
           msg.from = ws.role;
