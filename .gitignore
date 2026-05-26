@@ -44,3 +44,11 @@ server/node_modules/
 # Other
 SKILL.md
 memory.md
+
+# Android Studio inspection reports
+android/index.html
+android/script.js
+android/styles.css
+
+# Auto-generated Gradle daemon config
+android/gradle/gradle-daemon-jvm.properties
