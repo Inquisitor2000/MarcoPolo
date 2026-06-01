@@ -9,9 +9,11 @@ import androidx.lifecycle.viewModelScope
 import com.marcopolo.network.RelayClient
 import com.marcopolo.network.RouteFinder
 import com.marcopolo.network.RouteResult
+import com.marcopolo.network.RouteStep
 import com.marcopolo.service.LocationService
 import com.marcopolo.util.countdownFlow
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -60,6 +62,7 @@ data class PoloMapState(
     val partnerLat: Double? = null,
     val partnerLng: Double? = null,
     val routeLatLngs: List<List<Double>>? = null,
+    val routeSteps: List<RouteStep> = emptyList(),
     val distanceToTarget: Double? = null,
     val showCheckmark: Boolean = false,
     val isActive: Boolean = false,
@@ -81,6 +84,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
             partnerLat = ui.partnerLat,
             partnerLng = ui.partnerLng,
             routeLatLngs = ui.walkRoute?.geometry,
+            routeSteps = ui.walkRoute?.steps ?: emptyList(),
             distanceToTarget = ui.partnerDistance,
             showCheckmark = ui.showCheckmark,
             isActive = ui.isActive,
@@ -98,6 +102,12 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
     private var lastRouteOwnLng: Double? = null
     private var lastRoutePartnerLat: Double? = null
     private var lastRoutePartnerLng: Double? = null
+
+    /** Positions used for the currently DISPLAYED route. */
+    private var displayedRouteOwnLat: Double? = null
+    private var displayedRouteOwnLng: Double? = null
+    private var displayedRoutePartnerLat: Double? = null
+    private var displayedRoutePartnerLng: Double? = null
 
     companion object {
         private const val TAG = "MarcoPolo.Polo"
@@ -232,12 +242,17 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
 
                                 logD { "partner distance=${dist}m  threshold=${REVEAL_THRESHOLD_M}m  revealed=$revealed" }
 
+                                // Detect reveal transition so we can clear the stale
+                                // displayedRoute* tracker (set during pre-reveal OSRM)
+                                // that would otherwise reject the forced OSRM result.
+                                val isRevealTransition = revealed && !_uiState.value.partnerRevealed
+
                                 _uiState.update { current ->
                                     val wasRevealed = current.partnerRevealed
                                     val wasFound = current.showFoundDialog
                                     val timeOk = System.currentTimeMillis() >= current.foundDialogEnabledAtMs
                                     val nowFound = dist != null && dist <= FOUND_THRESHOLD_M && timeOk
-                                    val justRevealed = revealed && !wasRevealed
+                                    val justRevealed = isRevealTransition  // already computed outside
                                     // Show green checkmark when partner is ≤30m but auto-found hasn't triggered yet
                                     val checkmarkVisible = dist != null && dist <= CHECKMARK_THRESHOLD_M && !wasFound && !nowFound
                                     current.copy(
@@ -266,6 +281,15 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                         error = if (wasFound || nowFound) null else current.error
                                     )
                                 }
+                                // On reveal transition: clear stale displayedRoute* so the forced
+                                // OSRM result doesn't get rejected by anti-flip comparing against
+                                // old pre-reveal positions (which may be meters away from current).
+                                if (isRevealTransition) {
+                                    displayedRouteOwnLat = null
+                                    displayedRouteOwnLng = null
+                                    displayedRoutePartnerLat = null
+                                    displayedRoutePartnerLng = null
+                                }
                                 // Request route calculation using raw partner coords
                                 requestRouteUpdate(force = revealed)
                             }
@@ -276,30 +300,21 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                         _uiState.update { it.copy(showFoundDialog = true) }
                     }
                     "route" -> {
-                        Log.d(TAG, "rcvd route msg: profile=${msg.profile}  geometry=${msg.geometry?.size}pts  dist=${msg.distance}m")
-                        if (msg.geometry != null && msg.distance != null && msg.duration != null) {
+                        // Route sent by Marco — both sides call OSRM independently now,
+                        // so Marco's route is not used for display (Polo's own OSRM
+                        // result has correctly-oriented steps for Polo's direction).
+                        // Cache as pendingWalkRoute only (fallback for reveal promotion
+                        // if Polo's own OSRM hasn't completed yet).
+                        val geo = msg.geometry
+                        val d = msg.distance
+                        val dur = msg.duration
+                        if (geo != null && d != null && dur != null) {
                             val route = RouteResult(
-                                geometry = msg.geometry,
-                                distance = msg.distance,
-                                duration = msg.duration
+                                geometry = geo, distance = d, duration = dur,
+                                steps = msg.steps ?: emptyList()
                             )
-                            _uiState.update { current ->
-                                if (current.partnerRevealed) {
-                                    // Avoid route flipping: only accept if strictly shorter
-                                    // than what we already display (GPS jitter → different paths)
-                                    val best = when {
-                                        current.walkRoute == null -> route
-                                        route.distance < current.walkRoute.distance -> route
-                                        else -> current.walkRoute
-                                    }
-                                    current.copy(walkRoute = best, pendingWalkRoute = route)
-                                } else {
-                                    // Not yet revealed: cache for later promotion
-                                    Log.d(TAG, "partner NOT revealed, route cached")
-                                    current.copy(pendingWalkRoute = route)
-                                }
-                            }
-                            Log.d(TAG, "walk route stored for profile=${msg.profile}")
+                            _uiState.update { it.copy(pendingWalkRoute = route) }
+                            Log.d(TAG, "rcvd route from Marco, cached as pending")
                         } else {
                             Log.d(TAG, "route msg missing fields, ignored")
                         }
@@ -385,23 +400,51 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
         lastRoutePartnerLng = partnerLng
         lastRouteCalcMs = now
 
-        routeJob?.cancel()
+        // Cancel previous job AFTER starting new one avoids self-cancellation
+        // when the delayed refresh (3s GPS settle) fires requestRouteUpdate.
+        val prevRouteJob = routeJob
         routeJob = viewModelScope.launch {
+            prevRouteJob?.cancel()
             Log.d(TAG, "requestRouteUpdate: calculating WALKING route")
             val result = RouteFinder.findRoute(ownLat, ownLng, partnerLat, partnerLng)
 
             Log.d(TAG, "requestRouteUpdate: walkResult=${result != null}")
 
+            val hadWalkRouteBefore = _uiState.value.walkRoute != null
+
             _uiState.update { state ->
-                // Avoid route flipping: only accept new route if it's strictly
-                // shorter than the current one (GPS jitter can produce slightly
-                // different paths for the same position).
+                // Accept when positions changed (even if longer), reject
+                // GPS-jitter flips (same positions, near-equivalent path).
                 val bestWalk = if (state.partnerRevealed) {
                     when {
                         result == null -> null
-                        state.walkRoute == null -> result
-                        result.distance < state.walkRoute.distance -> result
-                        else -> state.walkRoute
+                        state.walkRoute == null || force -> {
+                            // First route, OR forced refresh — always accept.
+                            // Without `force` bypassing anti-flip, the delayed
+                            // GPS-settle refresh would get its new route rejected.
+                            if (force) {
+                                displayedRouteOwnLat = ownLat; displayedRouteOwnLng = ownLng
+                                displayedRoutePartnerLat = partnerLat; displayedRoutePartnerLng = partnerLng
+                            }
+                            result
+                        }
+                        else -> {
+                            val ownChanged = displayedRouteOwnLat == null || distanceBetween(
+                                displayedRouteOwnLat!!, displayedRouteOwnLng!!, ownLat, ownLng
+                            ) > ROUTE_MOVEMENT_THRESHOLD_M
+                            val partnerChanged = displayedRoutePartnerLat == null || distanceBetween(
+                                displayedRoutePartnerLat!!, displayedRoutePartnerLng!!, partnerLat, partnerLng
+                            ) > ROUTE_MOVEMENT_THRESHOLD_M
+                            if (ownChanged || partnerChanged) {
+                                displayedRouteOwnLat = ownLat; displayedRouteOwnLng = ownLng
+                                displayedRoutePartnerLat = partnerLat; displayedRoutePartnerLng = partnerLng
+                                result
+                            } else if (result.distance < state.walkRoute.distance) {
+                                result
+                            } else {
+                                state.walkRoute
+                            }
+                        }
                     }
                 } else {
                     state.walkRoute
@@ -410,6 +453,15 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                     walkRoute = bestWalk,
                     pendingWalkRoute = result ?: state.pendingWalkRoute
                 )
+            }
+
+            // After the first route result, schedule a refresh once GPS settles
+            // (8s). Cold GPS fix on first connection can be 20-50m off, giving
+            // a route that starts on the wrong street. Without this refresh the
+            // wrong route lingers until Polo sends a new location update.
+            if (!hadWalkRouteBefore && result != null) {
+                delay(8000L)
+                requestRouteUpdate(force = true)
             }
         }
     }

@@ -7,18 +7,21 @@ import android.graphics.Path
 import android.graphics.drawable.BitmapDrawable
 import android.view.MotionEvent
 import android.view.ViewGroup
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,10 +42,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlin.math.sqrt
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.marcopolo.network.RouteStep
 import com.marcopolo.util.hapticClick
 import org.osmdroid.tileprovider.tilesource.ITileSource
 import org.osmdroid.tileprovider.tilesource.XYTileSource
@@ -69,6 +73,169 @@ private val HIGH_QUALITY_TILES: ITileSource = XYTileSource(
 // Re-zoom when bounding box diagonal changes by > ~30m (in degrees)
 private const val MIN_BBOX_CHANGE = 0.0003
 
+// ── Navigation instruction model ─────────────────────────────────────────────
+
+/** Walking guidance: either turn-by-turn step or cardinal direction + distance. */
+private data class NavInstruction(
+    val arrow: String,      // "←", "↗", "↑", "📍", etc.
+    val primary: String,    // "Turn left onto Main St" or "NE"
+    val distance: String    // "50 m" or "0.4 km"
+)
+
+/** ── Step-finding engine ────────────────────────────────────────────── */
+
+private const val OFF_ROUTE_THRESHOLD_M = 60.0  // fallback to cardinal beyond this
+private const val STEP_ADVANCE_MARGIN_M = 8.0   // next step must be this much closer (avoids premature advance at boundaries)
+
+/** Find which route step the user is closest to.
+ *  Returns null if user is too far from route (off-route fallback).
+ *
+ *  Uses hysteresis at step boundaries: prefers current/earlier step when
+ *  distances are within GPS noise margin (STEP_ADVANCE_MARGIN_M). Without this,
+ *  GPS jitter (±8m typical) makes the next step's geometry appear closer,
+ *  causing the instruction to show the next street name (Polo's street)
+ *  before the user has progressed past the corner. */
+private fun findCurrentStep(
+    userLat: Double, userLng: Double,
+    steps: List<RouteStep>
+): Int? {
+    if (steps.isEmpty()) return null
+    if (steps.size == 1) return 0
+
+    var bestIdx = 0
+    var bestDist = Double.MAX_VALUE
+
+    // Phase 1: Find geometrically closest step
+    for (i in steps.indices) {
+        val dist = pointToPolylineDistance(userLat, userLng, steps[i].geometry)
+        if (dist < bestDist) {
+            bestDist = dist
+            bestIdx = i
+        }
+    }
+
+    // Off-route: return null so caller falls back to cardinal direction
+    if (bestDist > OFF_ROUTE_THRESHOLD_M) return null
+
+    // Phase 2: Hysteresis — prefer earlier step when next step isn't clearly closer.
+    // GPS noise (±8m) can make a later step appear closer even when the user
+    // hasn't actually reached that segment. This backward check combined with
+    // the forward advancement below creates a natural hysteresis band.
+    if (bestIdx > 0) {
+        val prevDist = pointToPolylineDistance(userLat, userLng, steps[bestIdx - 1].geometry)
+        if (prevDist < bestDist + STEP_ADVANCE_MARGIN_M) {
+            bestDist = prevDist
+            bestIdx -= 1
+        }
+    }
+
+    // Phase 3: Advance to next step when significantly closer
+    if (bestIdx < steps.size - 1) {
+        val nextDist = pointToPolylineDistance(userLat, userLng, steps[bestIdx + 1].geometry)
+        if (nextDist + STEP_ADVANCE_MARGIN_M < bestDist) bestIdx = bestIdx + 1
+    }
+
+    return bestIdx
+}
+
+/** Minimum distance from (px,py) to the polyline (list of [lat, lng] pairs). */
+private fun pointToPolylineDistance(px: Double, py: Double, polyline: List<List<Double>>): Double {
+    var minDist = Double.MAX_VALUE
+    for (i in 0 until polyline.size - 1) {
+        val ax = polyline[i][0]; val ay = polyline[i][1]  // [lat, lng]
+        val bx = polyline[i + 1][0]; val by = polyline[i + 1][1]
+        val dist = pointToSegmentDistance(px, py, ax, ay, bx, by)
+        if (dist < minDist) minDist = dist
+    }
+    return minDist
+}
+
+/** Minimum distance from point to line segment AB. */
+private fun pointToSegmentDistance(
+    px: Double, py: Double,
+    ax: Double, ay: Double,
+    bx: Double, by: Double
+): Double {
+    val dx = bx - ax; val dy = by - ay
+    val lenSq = dx * dx + dy * dy
+    if (lenSq == 0.0) {
+        val ex = px - ax; val ey = py - ay
+        return sqrt(ex * ex + ey * ey)
+    }
+    val t = (((px - ax) * dx + (py - ay) * dy) / lenSq).coerceIn(0.0, 1.0)
+    val nx = ax + t * dx; val ny = ay + t * dy
+    val ex = px - nx; val ey = py - ny
+    return sqrt(ex * ex + ey * ey)
+}
+
+/** Map OSRM maneuver modifier to a visual arrow. */
+private fun arrowForStep(modifier: String?): String = when (modifier) {
+    "left" -> "←"; "right" -> "→"
+    "sharp left" -> "↰"; "sharp right" -> "↱"
+    "slight left" -> "↖"; "slight right" -> "↗"
+    "straight", null -> "↑"; "uturn" -> "↓"
+    else -> "↑"
+}
+
+/** Distance in compact format. */
+private fun formatDistance(meters: Double): String =
+    if (meters < 1000.0) "${meters.toInt()} m" else "%.1f km".format(meters / 1000.0)
+
+/** Compute walking guidance: either turn-by-turn (when on-route with steps)
+ *  or relative-to-heading direction fallback (when off-route or steps unavailable).
+ *  The arrow shows direction relative to the user's compass heading — ↑ means
+ *  "walk forward (the way you're facing)", → means "turn right", etc. */
+private fun computeNavInstruction(
+    ownLat: Double?, ownLng: Double?,
+    partnerLat: Double?, partnerLng: Double?,
+    ownBearing: Float?,
+    distanceM: Double?,
+    routeSteps: List<RouteStep>
+): NavInstruction? {
+    val olat = ownLat ?: return null
+    val olng = ownLng ?: return null
+    val plat = partnerLat ?: return null
+    val plng = partnerLng ?: return null
+    val dist = distanceM ?: return null
+
+    // Already found — no guidance needed
+    if (dist <= 15f) return null
+
+    // ── Turn-by-turn from route steps (when on-route) ──
+    if (routeSteps.isNotEmpty()) {
+        val stepIdx = findCurrentStep(olat, olng, routeSteps)
+        if (stepIdx != null) {
+            val step = routeSteps[stepIdx]
+            // Last step = "Arrive" / reaching destination
+            // Guard threshold increased: don't show "Arrive onto [Polo's street]"
+            // when still >50m away.
+            if (stepIdx >= routeSteps.size - 1 && dist < 50.0) {
+                val destArrow = if (routeSteps.size > 1) "📍" else "↑"
+                return NavInstruction(destArrow, "Arrive", formatDistance(dist))
+            }
+            val arrow = arrowForStep(step.modifier)
+            val instruction = step.instruction
+            val stepDist = formatDistance(step.distance)
+            return NavInstruction(arrow, instruction, stepDist)
+        }
+    }
+
+    // ── Fallback: direction relative to user's facing ──
+    val from = android.location.Location("").also { it.latitude = olat; it.longitude = olng }
+    val to   = android.location.Location("").also { it.latitude = plat; it.longitude = plng }
+    val absBearing = from.bearingTo(to).let { if (it < 0f) it + 360f else it }
+
+    val userFacing = ownBearing ?: 0f
+    // Angle from user's facing to target direction (positive = clockwise)
+    val relative = ((absBearing - userFacing) % 360f + 360f) % 360f
+
+    val relativeArrows = arrayOf("↑", "↗", "→", "↘", "↓", "↙", "←", "↖")
+    val relativeLabels = arrayOf("Straight", "Right ahead", "Right", "Right back", "Back", "Left back", "Left", "Left ahead")
+    val idx = ((relative + 22.5f) % 360f / 45f).toInt()
+
+    return NavInstruction(relativeArrows[idx], relativeLabels[idx], formatDistance(dist))
+}
+
 /**
  * osmdroid MapView wrapped as a Compose component.
  * Shows own + partner markers, route polyline, zoom controls,
@@ -86,6 +253,7 @@ fun MarcoMap(
     partnerLng: Double?,
     partnerRole: String = "Partner",
     routeLatLngs: List<List<Double>>? = null,
+    routeSteps: List<RouteStep> = emptyList(),
     distanceToTarget: Double? = null,   // straight-line meters to partner
     showCheckmark: Boolean = false,     // green ✓ button when partner ≤30m
     onCheckmarkClick: (() -> Unit)? = null
@@ -125,35 +293,51 @@ fun MarcoMap(
 
     // ── Follow-me toggle: auto-center on own position ──
     var followMe by remember { mutableStateOf(true) }
-    val scope = rememberCoroutineScope()
 
-    // ── Smooth map orientation animation ──
-    val mapOrientation = remember { Animatable(0f) }
-    // Round bearing to nearest 5° to damp compass noise — reduces
-    // LaunchedEffect restarts from ~16Hz to ~1-2Hz on foot.
-    val targetOrientation = remember(ownBearing) {
-        val b = ownBearing ?: 0f
-        -(Math.round(b / 5f) * 5f)
-    }
-    // Delay orientation animation until map tiles settle (~2s).
-    // Prevents startup CPU burst: compass + map init + tile loading
-    // all competing on Honor 20's Mali-G76.
-    var orientationSettled by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(2000L)
-        orientationSettled = true
-    }
-    LaunchedEffect(targetOrientation, orientationSettled) {
-        if (orientationSettled) {
-            mapOrientation.animateTo(
-                targetOrientation,
-                animationSpec = tween(durationMillis = 350, easing = LinearEasing)
-            )
+
+    // ── Smooth map orientation via animateFloatAsState ──
+    // Round bearing to nearest 5° to damp compass noise while keeping
+    // rotation responsive during line-follow (~5-8° change at normal walking turn rate).
+    // animateFloatAsState handles mid-animation retargeting gracefully — when
+    // target value changes mid-animation it smoothly transitions from the current
+    // (partially-animated) value to the new target, unlike LaunchedEffect+Animatable
+    // which restarts from scratch on each change, causing the "chase" oscillation
+    // that resulted in ~1s uncontrolled rotation then revert.
+    //
+    // Exponential moving average on the raw compass bearing. Strong filtering
+    // (alpha=0.15) so brief sensor glitches (e.g., 0° spike during fast rotation)
+    // only move the smoothed value by 15% of the error per frame — producing at
+    // most one 5° orientation step instead of a full 45° snap to north.
+    var smoothBearing by remember { mutableFloatStateOf(0f) }
+    var hasSmoothBearing by remember { mutableStateOf(false) }
+    LaunchedEffect(ownBearing) {
+        val b = ownBearing ?: return@LaunchedEffect
+        if (!hasSmoothBearing) {
+            smoothBearing = b
+            hasSmoothBearing = true
         } else {
-            // Before settling, snap to latest bearing (no animation surge)
-            mapOrientation.snapTo(targetOrientation)
+            // Shortest-angle diff, handling 0/360 wrap
+            var diff = b - smoothBearing
+            if (diff > 180f) diff -= 360f
+            if (diff < -180f) diff += 360f
+            smoothBearing = ((smoothBearing + diff * 0.15f) % 360f + 360f) % 360f
         }
     }
+    val targetOrientation = remember(smoothBearing) {
+        -(Math.round(smoothBearing / 5f) * 5f)
+    }
+    // Delay orientation updates until map tiles settle (~2s).
+    // Prevents startup CPU burst: compass + map init + tile loading
+    // all competing on Honor 20's Mali-G76.
+    var orientationReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(2000L)
+        orientationReady = true
+    }
+    val mapOrientation by animateFloatAsState(
+        targetValue = if (orientationReady) targetOrientation else 0f,
+        animationSpec = tween(durationMillis = 300, easing = LinearEasing)
+    )
 
     // Show spinner until map tiles start loading
     var mapReady by remember { mutableStateOf(false) }
@@ -265,7 +449,7 @@ fun MarcoMap(
                         outlinePaint.strokeWidth = 22f
                         outlinePaint.isAntiAlias = true
                         outlinePaint.strokeCap = Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = Paint.Join.BEVEL
+                        outlinePaint.strokeJoin = Paint.Join.ROUND
                     }
                     overlays.add(polylineBg)
 
@@ -275,7 +459,7 @@ fun MarcoMap(
                         outlinePaint.strokeWidth = 10f
                         outlinePaint.isAntiAlias = true
                         outlinePaint.strokeCap = Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = Paint.Join.BEVEL
+                        outlinePaint.strokeJoin = Paint.Join.ROUND
                     }
                     overlays.add(polylineFg)
 
@@ -289,8 +473,9 @@ fun MarcoMap(
 
                     // ── Partner marker ──
                     partnerMarker = Marker(this).apply {
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         title = partnerRole
+                        setFlat(true)
                     }
                     overlays.add(partnerMarker)
 
@@ -355,11 +540,12 @@ fun MarcoMap(
 
                 // ── Rotate map only in follow-me mode — panning freely disengages it ──
                 if (followMe) {
-                    val orient = mapOrientation.value
-                    if (abs(orient - prevOrientation) > 0.5f && mv != null) {
+                    val orient = mapOrientation
+                    if (abs(orient - prevOrientation) > 1.5f && mv != null) {
                         mv.setMapOrientation(orient)
                         prevOrientation = orient
-                        dirty = true
+                        // Don't set dirty — setMapOrientation triggers internal redraw,
+                        // avoid redundant invalidate storm during rotation
                     }
                 }
 
@@ -430,7 +616,6 @@ fun MarcoMap(
                     } else {
                         polylineBg?.isVisible = false
                         polylineFg?.isVisible = false
-                        bboxDone = false
                     }
                 }
 
@@ -451,28 +636,37 @@ fun MarcoMap(
             }
         )
 
-        // ── Distance box at bottom-center ──
-        if (distanceToTarget != null) {
-            val distText = if (distanceToTarget < 1000) {
-                "%.0f m".format(distanceToTarget)
-            } else {
-                "%.2f km".format(distanceToTarget / 1000)
-            }
-            Text(
-                text = distText,
-                color = ComposeColor.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
+        // ── Navigation instruction card (bottom-center overlay) ──
+        // Shows turn-by-turn step or cardinal direction: "← Turn left onto Main St | 50 m"
+        val navInstr = remember(ownLat, ownLng, partnerLat, partnerLng, ownBearing, distanceToTarget, routeSteps) {
+            computeNavInstruction(ownLat, ownLng, partnerLat, partnerLng, ownBearing, distanceToTarget, routeSteps)
+        }
+        navInstr?.let { nav ->
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 28.dp)
-                    .background(
-                        color = ComposeColor(0xCC000000),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            )
+                    .padding(bottom = 28.dp, start = 16.dp, end = 16.dp)
+                    .wrapContentWidth()
+                    .background(ComposeColor(0xDD000000), RoundedCornerShape(12.dp))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("${nav.arrow} ${nav.primary}", fontSize = 14.sp, color = ComposeColor.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(nav.distance, fontSize = 14.sp, color = ComposeColor(0xFF88FF88), fontWeight = FontWeight.SemiBold)
+                    if (distanceToTarget != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "| Total: ${formatDistance(distanceToTarget)}",
+                            fontSize = 14.sp,
+                            color = ComposeColor(0xFF22DD66),
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                }
+            }
         }
 
         // ── Zoom + follow-me controls (bottom-right) ──
@@ -509,7 +703,6 @@ fun MarcoMap(
                         // Snap map rotation to current bearing immediately
                         val bearing = -(ownBearing ?: 0f)
                         prevOrientation = bearing
-                        scope.launch { mapOrientation.snapTo(bearing) }
                         mapView.value?.setMapOrientation(bearing)
                         // Re-center on own position
                         if (ownLat != null && ownLng != null) {

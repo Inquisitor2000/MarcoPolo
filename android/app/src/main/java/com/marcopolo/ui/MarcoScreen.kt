@@ -209,6 +209,7 @@ fun MarcoScreen(
                                 partnerLng = mapState.partnerLng,
                                 partnerRole = "Polo",
                                 routeLatLngs = mapState.routeLatLngs,
+                                routeSteps = mapState.routeSteps,
                                 distanceToTarget = mapState.distanceToTarget,
                                 showCheckmark = mapState.showCheckmark,
                                 onCheckmarkClick = { viewModel.completeSession() }

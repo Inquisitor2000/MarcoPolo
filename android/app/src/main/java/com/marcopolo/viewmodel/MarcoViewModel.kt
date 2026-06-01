@@ -9,9 +9,11 @@ import androidx.lifecycle.viewModelScope
 import com.marcopolo.network.RelayClient
 import com.marcopolo.network.RouteFinder
 import com.marcopolo.network.RouteResult
+import com.marcopolo.network.RouteStep
 import com.marcopolo.service.LocationService
 import com.marcopolo.util.countdownFlow
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -38,8 +40,11 @@ data class MarcoUiState(
     // Minimum system time (ms) before found dialog can fire.
     // Gives GPS positions ~20s to settle after session activation.
     val foundDialogEnabledAtMs: Long = 0L,
-    // Walking route calculated by Marco
+    // Walking route (displayed on map when revealed)
     val walkRoute: RouteResult? = null,
+    // Pre-reveal route cache — OSRM result saved here while partner not revealed,
+    // promoted to walkRoute on reveal transition (avoids double OSRM call).
+    val pendingWalkRoute: RouteResult? = null,
     // Raw partner coords (always set on receive, even before reveal)
     val rawPartnerLat: Double? = null,
     val rawPartnerLng: Double? = null,
@@ -58,6 +63,7 @@ data class MarcoMapState(
     val partnerLat: Double? = null,
     val partnerLng: Double? = null,
     val routeLatLngs: List<List<Double>>? = null,
+    val routeSteps: List<RouteStep> = emptyList(),
     val distanceToTarget: Double? = null,
     val showCheckmark: Boolean = false,
     val isActive: Boolean = false,
@@ -79,6 +85,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
             partnerLat = ui.partnerLat,
             partnerLng = ui.partnerLng,
             routeLatLngs = ui.walkRoute?.geometry,
+            routeSteps = ui.walkRoute?.steps ?: emptyList(),
             distanceToTarget = ui.partnerDistance,
             showCheckmark = ui.showCheckmark,
             isActive = ui.isActive,
@@ -96,6 +103,14 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
     private var lastRouteOwnLng: Double? = null
     private var lastRoutePartnerLat: Double? = null
     private var lastRoutePartnerLng: Double? = null
+
+    /** Positions used for the currently DISPLAYED route (not just last calc attempt).
+     *  Used to distinguish "positions actually changed" from "same positions, GPS jitter".
+     *  Updated only when a new route is accepted into state.walkRoute. */
+    private var displayedRouteOwnLat: Double? = null
+    private var displayedRouteOwnLng: Double? = null
+    private var displayedRoutePartnerLat: Double? = null
+    private var displayedRoutePartnerLng: Double? = null
 
     companion object {
         private const val TAG = "MarcoPolo.Marco"
@@ -237,37 +252,78 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
         lastRoutePartnerLng = partnerLng
         lastRouteCalcMs = now
 
-        routeJob?.cancel()
+        // Cancel previous job AFTER starting new one avoids self-cancellation
+        // when the delayed refresh (3s GPS settle) fires requestRouteUpdate.
+        val prevRouteJob = routeJob
         routeJob = viewModelScope.launch {
+            prevRouteJob?.cancel()
             Log.d(TAG, "requestRouteUpdate: calculating WALKING route")
             val result = RouteFinder.findRoute(ownLat, ownLng, partnerLat, partnerLng)
 
             Log.d(TAG, "requestRouteUpdate: walkResult=${result != null}")
 
-            // Pick the best route to keep: reject any that aren't strictly shorter
-            // than the currently displayed route. This prevents visual flipping
-            // between near-equivalent paths from GPS jitter.
+            // Accept new route when positions actually changed (even if longer),
+            // but reject GPS-jitter flips (same positions, near-equivalent path).
+            // Track displayed-route positions to distinguish the two cases.
+            val hadWalkRouteBefore = _uiState.value.walkRoute != null
             val keptRoute = if (result == null) null else {
                 val currentWalkRoute = _uiState.value.walkRoute
-                if (currentWalkRoute == null || result.distance < currentWalkRoute.distance) result
-                else currentWalkRoute
+                if (currentWalkRoute == null || force) {
+                    // First route, OR forced refresh — always accept.
+                    // Without `force` bypassing anti-flip, the delayed
+                    // cold-GPS-settle refresh would get its new route
+                    // rejected because positions hadn't moved >30m.
+                    if (force) {
+                        // Update displayedRoute* so subsequent anti-flip
+                        // works from this settled GPS position.
+                        displayedRouteOwnLat = ownLat; displayedRouteOwnLng = ownLng
+                        displayedRoutePartnerLat = partnerLat; displayedRoutePartnerLng = partnerLng
+                    }
+                    result
+                } else {
+                    val ownChanged = displayedRouteOwnLat == null || distanceBetween(
+                        displayedRouteOwnLat!!, displayedRouteOwnLng!!, ownLat, ownLng
+                    ) > ROUTE_MOVEMENT_THRESHOLD_M
+                    val partnerChanged = displayedRoutePartnerLat == null || distanceBetween(
+                        displayedRoutePartnerLat!!, displayedRoutePartnerLng!!, partnerLat, partnerLng
+                    ) > ROUTE_MOVEMENT_THRESHOLD_M
+                    if (ownChanged || partnerChanged) {
+                        // Positions moved — accept regardless of distance
+                        displayedRouteOwnLat = ownLat; displayedRouteOwnLng = ownLng
+                        displayedRoutePartnerLat = partnerLat; displayedRoutePartnerLng = partnerLng
+                        result
+                    } else if (result.distance < currentWalkRoute.distance) {
+                        // Same positions, strictly shorter — anti-flip accept
+                        result
+                    } else {
+                        currentWalkRoute
+                    }
+                }
             }
 
             _uiState.update { state ->
                 if (state.partnerRevealed) {
-                    state.copy(walkRoute = keptRoute)
+                    // Store in walkRoute, clear pending cache
+                    state.copy(walkRoute = keptRoute, pendingWalkRoute = null)
                 } else {
-                    state.copy(walkRoute = null)
+                    // Cache in pendingWalkRoute — promoted on reveal transition
+                    state.copy(walkRoute = null, pendingWalkRoute = keptRoute)
                 }
             }
 
-            // Send route to Polo even when not revealed (Polo caches it).
-            // Send keptRoute (what we're displaying) not raw result, so Polo
-            // doesn't flip to routes we already rejected.
-            keptRoute?.let {
-                relayClient.sendRoute(it.geometry, it.distance, it.duration, "foot")
-                Log.d(TAG, "walk route sent to Polo (${it.geometry.size} pts)")
+            // After the first route result, schedule a refresh once GPS settles
+            // (8s). Cold GPS fix on first connection can be 20-50m off, giving
+            // a route that starts on the wrong street. Without this refresh the
+            // wrong route lingers until Polo sends a new location update.
+            if (!hadWalkRouteBefore && keptRoute != null) {
+                delay(8000L)
+                requestRouteUpdate(force = true)
             }
+
+            // Route sharing via WebSocket removed — both Maco and Polo call OSRM
+            // independently with their own position as origin. Sending Marco's
+            // route to Polo caused Polo to display Marco-oriented turn-by-turn
+            // instructions instead of Polo's own (direction-reversed).
         }
     }
 
@@ -327,6 +383,11 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
 
                                 logD { "partner distance=${dist}m  threshold=${REVEAL_THRESHOLD_M}m  revealed=$revealed" }
 
+                                // Detect reveal transition so we can clear the stale
+                                // displayedRoute* tracker (set during pre-reveal OSRM)
+                                // that would otherwise reject the forced OSRM result.
+                                val isRevealTransition = revealed && !_uiState.value.partnerRevealed
+
                                 _uiState.update { current ->
                                     val wasFound = current.showFoundDialog
                                     val timeOk = System.currentTimeMillis() >= current.foundDialogEnabledAtMs
@@ -344,14 +405,30 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                         partnerRevealed = revealed,
                                         hasPartnerLocation = true,
                                         showCheckmark = checkmarkVisible,
-                                        // Clear walkRoute when unrevealed
-                                        walkRoute = if (revealed) current.walkRoute else null,
+                                        // Promote pendingWalkRoute on reveal (avoids double OSRM call);
+                                        // clear walkRoute when unrevealed.
+                                        walkRoute = when {
+                                            revealed && current.pendingWalkRoute != null -> current.pendingWalkRoute
+                                            revealed -> current.walkRoute
+                                            else -> null
+                                        },
+                                        pendingWalkRoute = if (revealed) null else current.pendingWalkRoute,
                                         showFoundDialog = wasFound || nowFound,
                                         // If this update triggers found, cancel any pending disconnect dialog
                                         showDisconnectDialog = if (wasFound || nowFound) false else current.showDisconnectDialog,
                                         error = if (wasFound || nowFound) null else current.error
                                     )
                                 }
+                                // On reveal transition: clear stale displayedRoute* so the forced
+                                // OSRM result doesn't get rejected by anti-flip comparing against
+                                // old pre-reveal positions (which may be meters away from current).
+                                if (isRevealTransition) {
+                                    displayedRouteOwnLat = null
+                                    displayedRouteOwnLng = null
+                                    displayedRoutePartnerLat = null
+                                    displayedRoutePartnerLng = null
+                                }
+
                                 // Always request route calc using raw coords (pre-reveal caching)
                                 // Force immediate calculation when revealed
                                 logD { "requesting route update (revealed=$revealed)" }

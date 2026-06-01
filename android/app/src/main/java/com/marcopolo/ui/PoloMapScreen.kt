@@ -213,6 +213,7 @@ fun PoloMapScreen(
                                 partnerLng = mapState.partnerLng,
                                 partnerRole = "Marco",
                                 routeLatLngs = mapState.routeLatLngs,
+                                routeSteps = mapState.routeSteps,
                                 distanceToTarget = mapState.distanceToTarget,
                                 showCheckmark = mapState.showCheckmark,
                                 onCheckmarkClick = { viewModel.completeSession() }

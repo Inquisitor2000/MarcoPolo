@@ -1,6 +1,7 @@
 package com.marcopolo.network
 
 import com.marcopolo.model.WsMessage
+import com.marcopolo.network.RouteStep
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -112,13 +113,14 @@ class RelayClient {
         webSocket?.send(json.encodeToString(WsMessage.serializer(), msg))
     }
 
-    fun sendRoute(geometry: List<List<Double>>, distance: Double, duration: Double, profile: String = "foot") {
+    fun sendRoute(geometry: List<List<Double>>, distance: Double, duration: Double, profile: String = "foot", steps: List<RouteStep> = emptyList()) {
         val msg = WsMessage(
             type = "route",
             geometry = geometry,
             distance = distance,
             duration = duration,
-            profile = profile
+            profile = profile,
+            steps = steps
         )
         webSocket?.send(json.encodeToString(WsMessage.serializer(), msg))
     }

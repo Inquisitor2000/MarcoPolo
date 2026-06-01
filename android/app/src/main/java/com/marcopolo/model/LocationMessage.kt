@@ -2,6 +2,7 @@
 
 package com.marcopolo.model
 
+import com.marcopolo.network.RouteStep
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -23,5 +24,6 @@ data class WsMessage(
     val geometry: List<List<Double>>? = null,  // [[lat, lng], ...]
     val distance: Double? = null,              // meters
     val duration: Double? = null,              // seconds
-    val profile: String? = null                // "foot" | "driving"
+    val profile: String? = null,               // "foot" | "driving"
+    val steps: List<RouteStep>? = null         // turn-by-turn steps
 )
