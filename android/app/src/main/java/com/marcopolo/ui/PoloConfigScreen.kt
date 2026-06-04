@@ -1,6 +1,7 @@
 package com.marcopolo.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -74,6 +75,7 @@ fun PoloConfigScreen(
                 value = code,
                 onValueChange = { code = it.filter { it.isDigit() }.take(4) },
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
                 textStyle = MaterialTheme.typography.headlineLarge.copy(
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 8.sp,

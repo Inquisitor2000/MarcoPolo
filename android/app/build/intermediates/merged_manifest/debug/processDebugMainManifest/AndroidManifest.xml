@@ -6,7 +6,7 @@
 
     <uses-sdk
         android:minSdkVersion="29"
-        android:targetSdkVersion="34" />
+        android:targetSdkVersion="36" />
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -72,7 +72,7 @@
                     android:host="join"
                     android:scheme="marcopolo" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:autoVerify="false" >
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
@@ -102,6 +102,13 @@
         <activity
             android:name="androidx.compose.ui.tooling.PreviewActivity"
             android:exported="true" />
+
+        <uses-library
+            android:name="androidx.window.extensions"
+            android:required="false" />
+        <uses-library
+            android:name="androidx.window.sidecar"
+            android:required="false" />
 
         <provider
             android:name="androidx.startup.InitializationProvider"

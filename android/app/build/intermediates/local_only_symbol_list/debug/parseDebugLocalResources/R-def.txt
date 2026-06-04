@@ -2,6 +2,7 @@ R_DEF: Internal format may change without notice
 local
 drawable ic_launcher_background
 drawable ic_launcher_foreground
+drawable ic_launcher_monochrome
 font inter_bold
 font inter_medium
 font inter_regular

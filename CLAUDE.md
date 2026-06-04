@@ -22,30 +22,41 @@
 - **Stale last-location cache on new session** (FIXED). After session end (found/disconnect), `stopService()` cleared `_currentLocation`. But next session's `fusedLocationClient.lastLocation` immediately returned the system's stale cached GPS. Fix: `LocationService.clearCache()` sets `skipLastLocation` flag — `onStartCommand` skips the stale fetch. Called from both ViewModels' `cleanup()`.
 - **Green checkmark manual found** (FIXED). Added `CHECKMARK_THRESHOLD_M = 30` — green ✓ button appears at top of bottom-right control column when partner ≤30m but auto-found hasn't triggered. Tapping sends `session_complete` via WebSocket; both sides show congratulations dialog.
 - **Nav instruction simplified** (CHANGED). Removed compass-relative direction ("Continue"/"Turn left"/"Turn back") — unreliable phone compass. Now uses map-aligned cardinal arrow (↑ NE ↗ → etc.) or turn-by-turn step instruction when on-route. No `ownBearing` dependency.
+- **Google Maps beam marker** (ADDED). Replaced internal arrow chevron with conical blue beam (pie-slice sector). Beam width varies with compass accuracy: narrow at SENSOR_STATUS_ACCURACY_HIGH (18°), wide at UNRELIABLE (80°). GPS accuracy shown as translucent blue Polygon circle on map (48-point approximation). `createYouBitmap()` → `createYouBeamBitmap(compassAccuracy)`.
 - **Distance box removed** (CHANGED). Standalone distance box at `bottom=28.dp` removed — distance already shown in nav instruction card. Nav card moved to `bottom=28.dp` with `wrapContentWidth()` (narrower).
+- **Header overlay respects status bar** (FIXED). Top header overlay overlapped system status bar. Fix: `statusBarsPadding()` on header overlay and error panel Box in map-ready state. Replaced `.padding(top = 60.dp)` hack in both screens.
+- **Map rotation 0/360 spin** (FIXED). `targetOrientation = -(round(smoothBearing/5)*5)` wraps from -360 to 0 when bearing crosses 359°↔1°. `animateFloatAsState` animates the full ±360 numeric difference → visible full-screen spin. Fix: continuous de-cycled target via shortest-angle diff accumulation, normalized to [0, 360) in update block. Also replaced `LaunchedEffect` with synchronous `remember` for EMA to eliminate coroutine restart overhead per sensor frame.
+- **Control buttons enlarged** (CHANGED). All bottom-right control buttons (checkmark, follow-me, zoom +, zoom -) increased from 40dp→48dp. Icons scaled proportionally. Zoom text 20sp→24sp.
+- **Debug overlay removed** (REMOVED). `DebugOverlay.kt` deleted. All references removed from MarcoScreen.kt and PoloMapScreen.kt (imports, state, clickable toggles, composable calls).
+- **Status bar scrim** (FIXED). `window.statusBarColor` ignored on API 35+. Fix: Compose-level `Box(TopCenter, fillMaxWidth, windowInsetsTopHeight(WindowInsets.statusBars), background(0xDD000000))` in map-ready state of both screens.
+- **Disconnect overlay** (CHANGED). Replaced Android `Dialog` (semi-transparent scrim) with full-screen `Box(fillMaxSize, background(theme.background), clickable/indication=null)` — fully opaque, theme-aware, no window layer.
+- **Congratulations overlay** (CHANGED). Same full-screen `Box` style as disconnect overlay. Uses `surface`/`onSurface` instead of `primaryContainer`/`onPrimaryContainer` to avoid purple tint from default Material3 colors.
+- **Theme simplified** (CHANGED). Single theme, no light/dark switching. `background`/`surface` = `#1C1C1C`. Removed `LightColors`, `isSystemInDarkTheme`, `lightColorScheme`.
+- **Found dialog race — second guard** (ADDED). `partner_disconnected` handler now checks `partnerDistance <= FOUND_THRESHOLD_M` as fallback — if partner was within 15m when they left, treat as found instead of disconnect. Covers race where partner navigates home before the other side processes its own location update that would trigger found.
+- **Polo room code input** (CHANGED). `RoundedCornerShape(12.dp)` on `OutlinedTextField` to match other UI elements.
 - **LSP false positives**: All `UNRESOLVED_REFERENCE` for Android/Kotlin SDK types are from missing Android SDK indexing, not real compile errors.
 
 ## Architecture
 - **No cloud accounts/API keys** — osmdroid + CartoDB Voyager tiles (free, no key)
 - **Relay**: `https://marcopolo-relay.onrender.com` (WebSocket relay for room/location sharing)
 - **Routing**: OSRM walking routes (free, no key) — both Marco and Polo call independently. `steps=true` returns turn-by-turn maneuvers with street names. Step-finding via point-to-polyline projection in MarcoMap.kt; falls back to cardinal direction when off-route (>60m) or steps unavailable.
-- **Found dialog**: Shared `mutableStateOf(false)` in `MarcoPoloNavGraph` (MainActivity.kt). Game screens call `onFound()` → sets flag + `popBackStack("home")`. HomeScreen renders congratulation `Dialog` on top. "Awesome!" calls `onDismissFound()` to clear flag.
+- **Found dialog**: Shared `mutableStateOf(false)` in `MarcoPoloNavGraph` (MainActivity.kt). Game screens call `onFound()` → sets flag + `popBackStack("home")`. HomeScreen renders congratulation full-screen `Box` overlay on top. "Awesome!" calls `onDismissFound()` to clear flag.
 - **Distance haptics**: `VIRTUAL_KEY` haptic fires once per milestone (1000, 500, 250, 125, 75, 50 m) when crossing closer. Tracked in `remember { mutableSetOf<Int>() }`. Found dialog gets `CONFIRM` haptic.
 - **Crossfade transitions**: `Crossfade(tween(400))` between room/loading/map states. Route polyline alpha animated via `animateFloatAsState(tween(600))`.
 - **Target**: Android 10+ (Honor 20 tested)
 
 ## Key Files
-- `MarcoViewModel.kt` — room creation, GPS collection, partner location handler, route calc (pre-reveal OSRM via `rawPartnerLat/Lng`, `force` param bypasses debounce). `partner_disconnected` handler checks `showFoundDialog` before setting disconnect. Location handler clears `showDisconnectDialog` + `error` on found.
+- `MarcoViewModel.kt` — room creation, GPS collection, partner location handler, route calc (pre-reveal OSRM via `rawPartnerLat/Lng`, `force` param bypasses debounce). `partner_disconnected` handler checks `showFoundDialog` first, then falls back to `partnerDistance <= FOUND_THRESHOLD_M` to bridge found race. Location handler clears `showDisconnectDialog` + `error` on found.
 - `PoloViewModel.kt` — room join, GPS collection, partner location handler, route caching (`pendingWalkRoute` promoted on reveal transition). Same pre-reveal OSRM, `requestRouteUpdate()` with debounce as Marco. Same `partner_disconnected` + location fixes as MarcoViewModel.
-- `MarcoScreen.kt` — Marco UI with `Crossfade` three-state, distance threshold haptic, `LaunchedEffect { delay(1500); onFound() }` (no inline found dialog).
-- `PoloMapScreen.kt` — Polo UI same `Crossfade` + haptic + found-dialog delay as MarcoScreen.
-- `MarcoMap.kt` — osmdroid wrapper with markers (You 36dp, partner 36dp), polylines (fg 10px, bg 22px, ROUND joins), follow-me, non-animated zoomToBoundingBox with try-catch, route polyline alpha animation (600ms tween), maxZoomLevel 19, minZoomLevel 15, bearing rounded to 2°, orientation delayed 2s, BitmapDrawable cached. Nav instruction card: turn-by-turn steps or cardinal fallback.
+- `MarcoScreen.kt` — Marco UI with full-height map (persistent dark header overlay) when mapReady, else Scaffold with TopAppBar for room/loading states. Crossfade three-state, distance threshold haptic, `LaunchedEffect { delay(1500); onFound() }` (no inline found dialog).
+- `PoloMapScreen.kt` — Polo UI same full-height map pattern, header overlay, Crossfade + haptic + found-dialog delay as MarcoScreen.
+- `MarcoMap.kt` — osmdroid wrapper with markers (You 36dp, partner 36dp), polylines (fg 10px, bg 22px, ROUND joins), follow-me, non-animated zoomToBoundingBox with try-catch, route polyline alpha animation (600ms tween), maxZoomLevel 19, minZoomLevel 15, bearing rounded to 2°, orientation delayed 2s, BitmapDrawable cached. Nav instruction card: turn-by-turn steps or cardinal fallback. Control buttons 48dp (Box+CircleShape+clickable, no FloatingActionButton).
 - `RouteFinder.kt` — OSRM client. Parses routes with `steps=true`, returns `RouteResult(geometry, distance, duration, steps)` where steps are `List<RouteStep>` with instruction, distance, geometry, modifier. `generateInstruction()` builds human-readable text from OSRM maneuver type/modifier/name.
 - `LocationService.kt` — foreground service, FusedLocationProviderClient, compass via rotation sensor, `getLastLocation()` fallback, GPS 3s min interval, compass SENSOR_DELAY_NORMAL (200ms).
 - `PermissionsViewModel.kt` — PENDING/GRANTED/DENIED state machine for location permission
 - `HapticClick.kt` — `hapticClick()` composable wrapper for all 15 interactive buttons
-- `DebugOverlay.kt` — lightweight state debug panel (toggle via title tap)
-- `HomeScreen.kt` — permission gate + role selection + found dialog rendering
+- `HomeScreen.kt` — permission gate + role selection + found dialog rendering (full-screen Box overlay)
+- `PoloConfigScreen.kt` — room code input with `OutlinedTextField`, "Connect" button, `RoundedCornerShape(12.dp)`
 - `MainActivity.kt` — osmdroid init (cache 25MB, threads 2), deep link support, `MarcoPoloNavGraph` with shared `foundDialogShown` state + `onFound` lambda
 - `RelayClient.kt` — OkHttp WebSocket, createRoom/connect/sendLocation/sendRoute/sendSessionComplete
 - `server/server.js` — `generateCode()` → numeric-only `[0-9]{4}`, deep link regex, forwards `session_complete` to partner

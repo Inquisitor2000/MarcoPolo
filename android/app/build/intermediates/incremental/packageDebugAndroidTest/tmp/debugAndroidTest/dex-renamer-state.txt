@@ -1,4 +1,4 @@
-#Thu May 21 13:29:07 EEST 2026
+#Mon Jun 01 13:24:55 EEST 2026
 base.0=/Users/base/Documents/FindMe/android/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/0/classes.dex
 path.0=0/classes.dex
 renamed.0=classes.dex

@@ -8,7 +8,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,19 +20,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marcopolo.service.LocationService
 import kotlinx.coroutines.delay
-import com.marcopolo.util.DebugOverlay
 import com.marcopolo.util.formatCountdown
 import com.marcopolo.util.hapticClick
 import com.marcopolo.viewmodel.MarcoViewModel
@@ -45,8 +45,6 @@ fun MarcoScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val mapState by viewModel.mapState.collectAsState()
-    var showDebug by remember { mutableStateOf(false) }
-
     // Start location foreground service (requires location permission already granted)
     fun startLocationService() {
         val intent = Intent(context, LocationService::class.java)
@@ -125,103 +123,184 @@ fun MarcoScreen(
         val hasAnyLocation = mapState.ownLat != null || mapState.hasPartnerLocation
         val mapReady = mapState.isActive && hasAnyLocation
 
-        Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Marco",
-                        modifier = Modifier.clickable { showDebug = !showDebug }
-                    )
-                },
-                actions = {
-                    if (mapReady) {
+        if (mapReady) {
+            // ── Full-screen map (no Scaffold, no TopAppBar) ──
+            Box(modifier = Modifier.fillMaxSize()) {
+                MarcoMap(
+                    modifier = Modifier.fillMaxSize(),
+                    ownLat = mapState.ownLat,
+                    ownLng = mapState.ownLng,
+                    ownBearing = mapState.ownBearing,
+                    partnerLat = mapState.partnerLat,
+                    partnerLng = mapState.partnerLng,
+                    partnerRole = "Polo",
+                    routeLatLngs = mapState.routeLatLngs,
+                    routeSteps = mapState.routeSteps,
+                    distanceToTarget = mapState.distanceToTarget,
+                    compassAccuracy = mapState.compassAccuracy,
+                    gpsAccuracy = mapState.gpsAccuracy,
+                    showCheckmark = mapState.showCheckmark,
+                    onCheckmarkClick = { viewModel.completeSession() }
+                )
+
+                // ── Status bar dark scrim ──
+                // System status bar is transparent on modern Android; this provides
+                // a dark background so white status bar icons are visible against
+                // bright map tiles.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .windowInsetsTopHeight(WindowInsets.statusBars)
+                        .background(Color(0xDD000000))
+                )
+
+                // ── Persistent header overlay (dark card style, matches nav instruction) ──
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .background(Color(0xDD000000), RoundedCornerShape(12.dp))
+                            .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = hapticClick {
+                            viewModel.cleanup()
+                            onBack()
+                        }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White
+                            )
+                        }
+                        Text(
+                            text = "Marco",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
                         Text(
                             text = formatCountdown(uiState.remainingSeconds),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 12.dp)
+                            color = Color(0xFF88FF88),
+                            modifier = Modifier.padding(end = 4.dp)
                         )
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = hapticClick {
-                        viewModel.cleanup()
-                        onBack()
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                }
+
+                // ── Error panel (below header overlay) ──
+                if (uiState.error != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(12.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                text = uiState.error!!,
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                // ── Debug overlay (togglable via title tap) ──
-                DebugOverlay(
-                    show = showDebug,
-                    onToggle = { showDebug = false },
-                    lines = listOf(
-                        "isActive" to "${uiState.isActive}",
-                        "ownLat" to "${uiState.ownLat ?: "null"}",
-                        "ownLng" to "${uiState.ownLng ?: "null"}",
-                        "partnerLat" to "${uiState.partnerLat ?: "null"}",
-                        "partnerRevealed" to "${uiState.partnerRevealed}",
-                        "hasPartnerLoc" to "${uiState.hasPartnerLocation}",
-                        "rawPartnerLat" to "${uiState.rawPartnerLat ?: "null"}",
-                        "permReady" to "${uiState.permissionsReady}",
-                        "locReady" to "${uiState.locationReady}",
-                        "sentCount" to "${uiState.sentCount}",
-                        "roomCode" to "${uiState.roomCode ?: "null"}",
-                        "error" to "${uiState.error ?: "none"}"
+                }
+
+            }
+        } else {
+            // ── Room / Loading states with Scaffold ──
+            Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Marco"
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = hapticClick {
+                            viewModel.cleanup()
+                            onBack()
+                        }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
                 )
-
-                // ── Content crossfade: room → loading → map ──
-                val contentState = when {
-                    mapReady -> "map"
-                    mapState.isActive -> "loading"
-                    else -> "room"
-                }
-                Crossfade(
-                    targetState = contentState,
-                    animationSpec = tween(400)
-                ) { state ->
-                    when (state) {
-                        "map" -> Box(Modifier.fillMaxSize()) {
-                            MarcoMap(
-                                modifier = Modifier.fillMaxSize(),
-                                ownLat = mapState.ownLat,
-                                ownLng = mapState.ownLng,
-                                ownBearing = mapState.ownBearing,
-                                partnerLat = mapState.partnerLat,
-                                partnerLng = mapState.partnerLng,
-                                partnerRole = "Polo",
-                                routeLatLngs = mapState.routeLatLngs,
-                                routeSteps = mapState.routeSteps,
-                                distanceToTarget = mapState.distanceToTarget,
-                                showCheckmark = mapState.showCheckmark,
-                                onCheckmarkClick = { viewModel.completeSession() }
-                            )
-
-                            // ── Info panel overlaid on map ──
-                            Column(
+            }
+            ) { padding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    val contentState = if (mapState.isActive) "loading" else "room"
+                    Crossfade(
+                        targetState = contentState,
+                        animationSpec = tween(400)
+                    ) { state ->
+                        when (state) {
+                            "loading" -> Column(
                                 modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 4.dp
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                val waitingMessage = if (mapState.ownLat == null && !mapState.hasPartnerLocation) {
+                                    "Acquiring GPS and waiting for Polo..."
+                                } else if (mapState.ownLat == null) {
+                                    "Acquiring GPS..."
+                                } else {
+                                    "Waiting for Polo's location..."
+                                }
+                                Text(
+                                    text = waitingMessage,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = uiState.roomCode ?: "",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            "room" -> Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
                                 if (uiState.error != null) {
                                     Card(
@@ -237,124 +316,67 @@ fun MarcoScreen(
                                             color = MaterialTheme.colorScheme.onErrorContainer
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(24.dp))
                                 }
-                            }
-                        }
-                        "loading" -> Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(48.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 4.dp
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            val waitingMessage = if (mapState.ownLat == null && !mapState.hasPartnerLocation) {
-                                "Acquiring GPS and waiting for Polo..."
-                            } else if (mapState.ownLat == null) {
-                                "Acquiring GPS..."
-                            } else {
-                                "Waiting for Polo's location..."
-                            }
-                            Text(
-                                text = waitingMessage,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = uiState.roomCode ?: "",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        "room" -> Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            if (uiState.error != null) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.errorContainer
-                                    )
-                                ) {
-                                    Text(
-                                        text = uiState.error!!,
-                                        modifier = Modifier.padding(16.dp),
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(24.dp))
-                            }
 
-                            if (uiState.roomCode != null) {
-                                Text(
-                                    text = "Share code with Polo",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
+                                if (uiState.roomCode != null) {
                                     Text(
-                                        text = uiState.roomCode!!,
-                                        textAlign = TextAlign.Center,
-                                        fontSize = 56.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 8.sp,
-                                        color = MaterialTheme.colorScheme.primary
+                                        text = "Share code with Polo",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    IconButton(
-                                        onClick = hapticClick {
-                                            val shareIntent = Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                putExtra(
-                                                    Intent.EXTRA_TEXT,
-                                                    "🐺 I say Marco, You say Polo.\nhttps://marcopolo-relay.onrender.com/join/${uiState.roomCode}"
-                                                )
-                                                type = "text/plain"
-                                            }
-                                            context.startActivity(Intent.createChooser(shareIntent, "Invite Polo"))
-                                        }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Share,
-                                            contentDescription = "Share room code",
-                                            tint = MaterialTheme.colorScheme.primary
+                                        Text(
+                                            text = uiState.roomCode!!,
+                                            textAlign = TextAlign.Center,
+                                            fontSize = 56.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 8.sp,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        IconButton(
+                                            onClick = hapticClick {
+                                                val shareIntent = Intent().apply {
+                                                    action = Intent.ACTION_SEND
+                                                    putExtra(
+                                                        Intent.EXTRA_TEXT,
+                                                        "🐺 I say Marco, You say Polo.\nhttps://marcopolo-relay.onrender.com/join/${uiState.roomCode}"
+                                                    )
+                                                    type = "text/plain"
+                                                }
+                                                context.startActivity(Intent.createChooser(shareIntent, "Invite Polo"))
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Share,
+                                                contentDescription = "Share room code",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Waiting for Polo to connect...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                                    )
+                                } else {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        strokeWidth = 3.dp
+                                    )
                                 }
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Waiting for Polo to connect...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(32.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    strokeWidth = 3.dp
-                                )
                             }
                         }
                     }
                 }
-
             }
         }
 
@@ -383,17 +405,22 @@ fun MarcoScreen(
             }
         }
 
-        // ── Disconnect dialog ──
+        // ── Disconnect overlay ──
+        // Full-screen opaque overlay — completely hides the map behind a solid
+        // background. Touch consumes any accidental taps on the covered map.
         if (uiState.showDisconnectDialog) {
-            Dialog(
-                onDismissRequest = {
-                    viewModel.cleanup()
-                    onBack()
-                },
-                properties = DialogProperties(usePlatformDefaultWidth = false)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { /* consume touch — no dismiss on outside tap */ }
             ) {
                 Card(
                     modifier = Modifier
+                        .align(Alignment.Center)
                         .widthIn(min = 300.dp, max = 360.dp)
                         .padding(16.dp),
                     shape = RoundedCornerShape(28.dp),

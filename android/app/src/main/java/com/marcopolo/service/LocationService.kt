@@ -28,10 +28,17 @@ class LocationService : Service(), SensorEventListener {
         private val _currentLocation = MutableStateFlow<Location?>(null)
         val currentLocation: StateFlow<Location?> = _currentLocation.asStateFlow()
 
-        /** Compass heading in degrees (0=north, 90=east, clockwise).
-         *  Updated from the rotation-vector sensor; null if sensor unavailable or no reading yet. */
-        private val _compassHeading = MutableStateFlow<Float?>(null)
-        val compassHeading: StateFlow<Float?> = _compassHeading.asStateFlow()
+    /** Compass heading in degrees (0=north, 90=east, clockwise).
+     *  Updated from the rotation-vector sensor; null if sensor unavailable or no reading yet. */
+    private val _compassHeading = MutableStateFlow<Float?>(null)
+    val compassHeading: StateFlow<Float?> = _compassHeading.asStateFlow()
+
+    /** Compass accuracy from rotation-vector sensor.
+     *  Maps to SensorManager.SENSOR_STATUS_* constants:
+     *  0 = UNRELIABLE, 1 = ACCURACY_LOW, 2 = ACCURACY_MEDIUM, 3 = ACCURACY_HIGH.
+     *  Defaults to MEDIUM if sensor is available but hasn't reported accuracy yet. */
+    private val _compassAccuracy = MutableStateFlow(SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM)
+    val compassAccuracy: StateFlow<Int> = _compassAccuracy.asStateFlow()
 
         /** When true, the next onStartCommand will skip fusedLocationClient.lastLocation
          *  to avoid seeding a fresh session with stale GPS from a previous session. */
@@ -126,7 +133,9 @@ class LocationService : Service(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // No-op — compass works even at reduced accuracy for this use case
+        if (sensor?.type == Sensor.TYPE_ROTATION_VECTOR) {
+            _compassAccuracy.value = accuracy
+        }
     }
 
     override fun onDestroy() {
@@ -134,6 +143,7 @@ class LocationService : Service(), SensorEventListener {
         fusedLocationClient.removeLocationUpdates(locationCallback)
         _currentLocation.value = null
         _compassHeading.value = null
+        _compassAccuracy.value = SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM
         serviceScope.cancel()
         super.onDestroy()
     }

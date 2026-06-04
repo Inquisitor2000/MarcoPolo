@@ -2,6 +2,7 @@ package com.marcopolo.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.hardware.SensorManager
 import android.location.Location
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -50,6 +51,10 @@ data class MarcoUiState(
     val rawPartnerLng: Double? = null,
     // Green checkmark (manual found when ≤30m)
     val showCheckmark: Boolean = false,
+    // Compass accuracy from rotation-vector sensor (SENSOR_STATUS_*)
+    val compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM,
+    // GPS horizontal accuracy in meters (from location.accuracy)
+    val gpsAccuracy: Float? = null,
     // Debug counters
     val sentCount: Int = 0
 )
@@ -66,6 +71,8 @@ data class MarcoMapState(
     val routeSteps: List<RouteStep> = emptyList(),
     val distanceToTarget: Double? = null,
     val showCheckmark: Boolean = false,
+    val compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM,
+    val gpsAccuracy: Float? = null,
     val isActive: Boolean = false,
     val hasPartnerLocation: Boolean = false
 )
@@ -88,6 +95,8 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
             routeSteps = ui.walkRoute?.steps ?: emptyList(),
             distanceToTarget = ui.partnerDistance,
             showCheckmark = ui.showCheckmark,
+            compassAccuracy = ui.compassAccuracy,
+            gpsAccuracy = ui.gpsAccuracy,
             isActive = ui.isActive,
             hasPartnerLocation = ui.hasPartnerLocation
         )
@@ -168,14 +177,15 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
             var lastLng: Double? = null
             combine(
                 LocationService.currentLocation,
-                LocationService.compassHeading
-            ) { location, heading ->
+                LocationService.compassHeading,
+                LocationService.compassAccuracy
+            ) { location, heading, compAccuracy ->
                 // Prefer compass heading over GPS movement bearing
                 val bearing = heading ?: (if (location?.hasBearing() == true) location.bearing else null)
-                Pair(location, bearing)
-            }.collect { (location, bearing) ->
-                // Always update bearing (compass updates even when stationary)
-                _uiState.update { it.copy(ownBearing = bearing) }
+                Triple(location, bearing, compAccuracy)
+            }.collect { (location, bearing, compAccuracy) ->
+                // Always update bearing and compass accuracy (updates even when stationary)
+                _uiState.update { it.copy(ownBearing = bearing, compassAccuracy = compAccuracy) }
                 // Only send location / update route when coordinates actually change
                 if (location != null) {
                     val lat = location.latitude
@@ -184,7 +194,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                         lastLat = lat
                         lastLng = lng
                         logD { "own location: $lat, $lng  accuracy=${location.accuracy}" }
-                        _uiState.update { it.copy(ownLat = lat, ownLng = lng, sentCount = it.sentCount + 1) }
+                        _uiState.update { it.copy(ownLat = lat, ownLng = lng, gpsAccuracy = location.accuracy, sentCount = it.sentCount + 1) }
                         relayClient.sendLocation(lat, lng, location.accuracy)
                         logD { "sendLocation called (sent=${_uiState.value.sentCount}) bearing=$bearing" }
                         requestRouteUpdate()
@@ -351,15 +361,23 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                     "partner_disconnected" -> {
                         _uiState.update { current ->
                             if (current.showFoundDialog) {
-                                // Already found — don't change anything, found dialog
-                                // handles navigation + cleanup after delay
+                                // Already found — don't change anything
                                 current
                             } else {
-                                current.copy(
-                                    isActive = false,
-                                    error = "Polo disconnected",
-                                    showDisconnectDialog = true
-                                )
+                                // Partner was within found threshold when they left —
+                                // treat as found to prevent race where one side
+                                // navigates home before the other processes found.
+                                val dist = current.partnerDistance
+                                val timeOk = System.currentTimeMillis() >= current.foundDialogEnabledAtMs
+                                if (dist != null && dist <= FOUND_THRESHOLD_M && timeOk) {
+                                    current.copy(showFoundDialog = true)
+                                } else {
+                                    current.copy(
+                                        isActive = false,
+                                        error = "Polo disconnected",
+                                        showDisconnectDialog = true
+                                    )
+                                }
                             }
                         }
                         // Don't clean up — let user dismiss the dialog first

@@ -6,6 +6,9 @@ import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -17,8 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marcopolo.util.hapticClick
@@ -182,7 +183,7 @@ fun HomeScreen(
         }
     }
 
-    // ── Found dialog (shown on top of home screen after a match) ──
+    // ── Found overlay (full-screen opaque, matching disconnect overlay style) ──
     if (showFoundDialog) {
         val view = LocalView.current
         LaunchedEffect(Unit) {
@@ -191,17 +192,23 @@ fun HomeScreen(
                 view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             }
         }
-        Dialog(
-            onDismissRequest = { onDismissFound() },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { /* consume touch */ }
         ) {
             Card(
                 modifier = Modifier
+                    .align(Alignment.Center)
                     .widthIn(min = 300.dp, max = 360.dp)
                     .padding(16.dp),
                 shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Column(
@@ -211,7 +218,7 @@ fun HomeScreen(
                     Text(
                         "Congratulations!",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.Bold
                     )
@@ -219,7 +226,7 @@ fun HomeScreen(
                     Text(
                         "You found each other!",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.SemiBold
                     )

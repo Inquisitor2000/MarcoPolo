@@ -23,8 +23,8 @@ private val DarkColors = darkColorScheme(
     primary = Color(0xFF4ADE80),
     onPrimary = Color(0xFF000000),
     secondary = Color(0xFF60A5FA),
-    background = Color(0xFF1A1A2E),
-    surface = Color(0xFF16213E),
+    background = Color(0xFF1C1C1C),
+    surface = Color(0xFF1C1C1C),
     onBackground = Color(0xFFEEEEEE),
     onSurface = Color(0xFFEEEEEE),
 )
