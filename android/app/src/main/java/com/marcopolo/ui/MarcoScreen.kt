@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -270,13 +271,19 @@ fun MarcoScreen(
                                 }
                             }
                         }
-                        Text(
-                            text = formatCountdown(uiState.remainingSeconds),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF88FF88),
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
+                        // Fixed-width container prevents timer digit changes from shifting the toggle
+                        Box(
+                            modifier = Modifier.width(80.dp).padding(end = 4.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Text(
+                                text = formatCountdown(uiState.remainingSeconds),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = Color(0xFF88FF88)
+                            )
+                        }
                     }
                 }
 
