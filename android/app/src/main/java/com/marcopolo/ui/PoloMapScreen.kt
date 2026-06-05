@@ -499,8 +499,8 @@ fun PoloMapScreen(
                         Spacer(modifier = Modifier.height(28.dp))
                         Button(
                             onClick = hapticClick {
-                                viewModel.cleanup()
                                 onBack()
+                                // cleanup happens in ViewModel.onCleared() when nav entry is popped
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
