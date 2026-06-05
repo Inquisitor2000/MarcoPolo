@@ -663,7 +663,7 @@ fun MarcoMap(
                     accuracyPolygon?.isVisible = false
                 }
 
-                // ── Update polylines only when route or positions change ──
+                // ── Update polyline points when route or positions change ──
                 val haveBoth = ownLat != null && ownLng != null && partnerLat != null && partnerLng != null
                 val routeKey = if (haveBoth) {
                     "${ownLat},${ownLng},${partnerLat},${partnerLng},${routeLatLngs?.size}"
@@ -711,7 +711,7 @@ fun MarcoMap(
                     }
                 }
 
-                // ── Route alpha on every update — smooth fade-in/out ──
+                // ── Route alpha — simple fade-in/out based on partner reveal state ──
                 val alphaBg = (routeAlpha * 60).toInt().coerceIn(0, 255)
                 val alphaFg = (routeAlpha * 255).toInt().coerceIn(0, 255)
                 if (alphaBg != (polylineBg?.outlinePaint?.alpha ?: 0) ||
