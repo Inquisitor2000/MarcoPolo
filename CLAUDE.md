@@ -98,4 +98,4 @@ Three states per screen (once permissions granted):
 
 ## TODO
 - **App icon**: Current icon is the default Android icon. Replace with branded Marco Polo logo.
-- **Firebase Analytics**: Service monitoring (rooms stats, activity, no user tracking). Android Firebase SDK + server-side events.
+- **Firebase Analytics**: Service monitoring dashboard (rooms created, rooms completed/found, activity). No user tracking. Android Firebase SDK + server-side events emitted from server.js on room created (+ code hash), fully packed, and session_complete forwarded.
