@@ -41,10 +41,13 @@
 - **Routing mode toggle** (CHANGED). Custom pill toggle (80×32dp, rounded 16dp) with walk/car icons on dark circular backdrops (26dp, always on top of the sliding thumb). Thumb is a 40dp pill sliding with spring animation behind icons. Inverted logic: footpath = thumb left, street = thumb right. Each device persists choice via SharedPreferences (`routing_footpath`, default true). `setRoutingMode()` saves + calls `requestRouteUpdate(force=true)`.
 - **Permission compliance** (CHANGED). Removed `POST_NOTIFICATIONS` entirely (no longer requested). Removed `ACCESS_COARSE_LOCATION` — only precise `ACCESS_FINE_LOCATION` is requested. Permission gate screens styled to match dark theme (full-screen `#1C1C1C` background, pill-shaped buttons).
 - **Permission screen flash on cleanup** (FIXED). `cleanup()` reset `_uiState` with default `permissionsReady = false`, causing 1-2 frame flash of permission gate when showing disconnect dialog. Fix: `MarcoUiState(permissionsReady = true)` / `PoloUiState(permissionsReady = true)` on cleanup.
+- **Disconnect dialog room-code flash** (FIXED). OK button in disconnect dialog called `cleanup()` which reset UI state to default (room code screen). For 1-2 frames before `popBackStack` navigated home, user saw room-code screen. Fix: OK button calls `onBack()` (nav pop) first; cleanup deferred to `ViewModel.onCleared()` which fires when nav entry is popped. Applied to both MarcoScreen and PoloMapScreen.
+- **Routing mode toggle layout shift** (FIXED). Countdown timer `formatCountdown()` text changed pixel width each tick (proportional font → different digit widths). The `weight(1f)` Box holding the routing toggle in the header Row absorbed the slack, shifting the toggle every second. Fix: wrap countdown in `Box(width=80.dp)` + `FontFamily.Monospace` for constant width.
 
 ## Architecture
 - **No cloud accounts/API keys** — osmdroid + CartoDB Voyager tiles (free, no key)
 - **Relay**: `https://marcopolo-relay.onrender.com` (WebSocket relay for room/location sharing)
+- **Server thinness**: ~80 lines of logic. Pure dumb pipe — no OSRM, no persistence, no auth. In-memory Map, 17min TTL cleanup. ~0.8 MB per 15-min session (bidirectional). Free tier handles ~4000 MAU / 200 peak concurrent rooms before bandwidth becomes first limit (~100 GB/mo).
 - **Routing**: Two OSRM modes toggleable per-device via header Switch. Both modes free, no key:
   - **Footpath** (default): `routing.openstreetmap.de/routed-foot` — OSRM compiled with footpath data, better pedestrian coverage.
   - **Main St**: `router.project-osrm.org` — standard OSRM foot profile, road-oriented.
@@ -95,3 +98,4 @@ Three states per screen (once permissions granted):
 
 ## TODO
 - **App icon**: Current icon is the default Android icon. Replace with branded Marco Polo logo.
+- **Firebase Analytics**: Service monitoring (rooms stats, activity, no user tracking). Android Firebase SDK + server-side events.
