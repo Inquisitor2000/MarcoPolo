@@ -30,10 +30,16 @@ object RouteFinder {
      */
     suspend fun findRoute(
         fromLat: Double, fromLng: Double,
-        toLat: Double, toLng: Double
+        toLat: Double, toLng: Double,
+        useFootpath: Boolean = true
     ): RouteResult? {
         // OSRM expects lng,lat order
-        val url = "https://router.project-osrm.org/route/v1/foot/" +
+        val baseUrl = if (useFootpath) {
+            "https://routing.openstreetmap.de/routed-foot/route/v1/foot/"
+        } else {
+            "https://router.project-osrm.org/route/v1/foot/"
+        }
+        val url = baseUrl +
                 "$fromLng,$fromLat;$toLng,$toLat" +
                 "?overview=full&geometries=geojson&alternatives=false&steps=true"
 

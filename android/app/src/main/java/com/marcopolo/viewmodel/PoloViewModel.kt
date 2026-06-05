@@ -69,6 +69,7 @@ data class PoloMapState(
     val routeLatLngs: List<List<Double>>? = null,
     val routeSteps: List<RouteStep> = emptyList(),
     val distanceToTarget: Double? = null,
+    val routeDistance: Double? = null,
     val showCheckmark: Boolean = false,
     val compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM,
     val gpsAccuracy: Float? = null,
@@ -93,6 +94,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
             routeLatLngs = ui.walkRoute?.geometry,
             routeSteps = ui.walkRoute?.steps ?: emptyList(),
             distanceToTarget = ui.partnerDistance,
+            routeDistance = ui.walkRoute?.distance,
             showCheckmark = ui.showCheckmark,
             compassAccuracy = ui.compassAccuracy,
             gpsAccuracy = ui.gpsAccuracy,
@@ -117,6 +119,16 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
     private var displayedRouteOwnLng: Double? = null
     private var displayedRoutePartnerLat: Double? = null
     private var displayedRoutePartnerLng: Double? = null
+
+    private val prefs = getApplication<Application>().getSharedPreferences("marco_polo", 0)
+    private val _useFootpath = MutableStateFlow(prefs.getBoolean("routing_footpath", true))
+    val useFootpath: StateFlow<Boolean> = _useFootpath.asStateFlow()
+
+    fun setRoutingMode(footpath: Boolean) {
+        _useFootpath.value = footpath
+        prefs.edit().putBoolean("routing_footpath", footpath).apply()
+        requestRouteUpdate(force = true)
+    }
 
     companion object {
         private const val TAG = "MarcoPolo.Polo"
@@ -424,7 +436,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
         routeJob = viewModelScope.launch {
             prevRouteJob?.cancel()
             Log.d(TAG, "requestRouteUpdate: calculating WALKING route")
-            val result = RouteFinder.findRoute(ownLat, ownLng, partnerLat, partnerLng)
+            val result = RouteFinder.findRoute(ownLat, ownLng, partnerLat, partnerLng, _useFootpath.value)
 
             Log.d(TAG, "requestRouteUpdate: walkResult=${result != null}")
 
@@ -493,7 +505,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
         getApplication<Application>().stopService(
             Intent(getApplication(), LocationService::class.java)
         )
-        _uiState.update { PoloUiState() }
+        _uiState.update { PoloUiState(permissionsReady = true) }
     }
 
     override fun onCleared() {

@@ -246,8 +246,21 @@ private fun computeNavInstruction(
                 val destArrow = if (routeSteps.size > 1) "📍" else relativeArrows[idx]
                 return NavInstruction(destArrow, "Arrive", formatDistance(dist))
             }
-            val instruction = step.instruction
+            var instruction = step.instruction
             val stepDist = formatDistance(step.distance)
+            // OSRM depart step often has empty street name → just "Head".
+            // Peek at next step for a meaningful street name.
+            if (instruction == "Head" && stepIdx + 1 < routeSteps.size) {
+                val next = routeSteps[stepIdx + 1]
+                val parts = next.instruction.split(" onto ")
+                if (parts.size >= 2) {
+                    instruction = "Head towards ${parts[1]}"
+                }
+            }
+            // Still bare "Head" (no street anywhere) → use relative direction
+            if (instruction == "Head") {
+                instruction = relativeLabels[idx]
+            }
             return NavInstruction(relativeArrows[idx], instruction, stepDist)
         }
     }
@@ -275,6 +288,7 @@ fun MarcoMap(
     routeLatLngs: List<List<Double>>? = null,
     routeSteps: List<RouteStep> = emptyList(),
     distanceToTarget: Double? = null,   // straight-line meters to partner
+    routeDistance: Double? = null,      // calculated route meters (changes with routing mode)
     compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM,
     gpsAccuracy: Float? = null,         // meters, from location.accuracy
     showCheckmark: Boolean = false,     // green ✓ button when partner ≤30m
@@ -317,8 +331,8 @@ fun MarcoMap(
     // Trigger to zoom from a LaunchedEffect (post-layout) instead of from the update lambda
     var bboxZoomTrigger by remember { mutableIntStateOf(0) }
 
-    // ── Follow-me toggle: auto-center on own position ──
-    var followMe by remember { mutableStateOf(true) }
+    // ── Follow-me always-on: auto-center on own position, panning disabled ──
+    val followMe = true
 
 
     // ── Smooth map orientation via animateFloatAsState ──
@@ -434,6 +448,10 @@ fun MarcoMap(
                     ),
                     false, 0
                 )
+                // Re-center on own position — bbox zoom shifts to midpoint
+                // between both markers, but follow-me always-on means user
+                // should stay at screen center.
+                mv.controller.setCenter(GeoPoint(oLat, oLng))
             } catch (_: Exception) {
                 // Non-critical — route polyline still visible at default zoom.
                 // Catch to prevent crash on slow GPU / initializing MapView.
@@ -537,29 +555,8 @@ fun MarcoMap(
                     }
                     overlays.add(partnerMarker)
 
-                    // ── Detect user pan to disengage follow-me ──
-                    var lastTouchX = 0f
-                    var lastTouchY = 0f
-                    setOnTouchListener { _, event ->
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN -> {
-                                lastTouchX = event.x
-                                lastTouchY = event.y
-                                false
-                            }
-                            MotionEvent.ACTION_MOVE -> {
-                                if (event.pointerCount == 1 && followMe) {
-                                    val dx = event.x - lastTouchX
-                                    val dy = event.y - lastTouchY
-                                    if (dx * dx + dy * dy > 400f) {
-                                        followMe = false
-                                    }
-                                }
-                                false
-                            }
-                            else -> false
-                        }
-                    }
+                    // ── Block all touch — prevent map panning (follow-me always-on) ──
+                    setOnTouchListener { _, _ -> true }
                 }
             },
             update = { _ ->
@@ -784,11 +781,13 @@ fun MarcoMap(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
-                    // Line 4: Total distance
-                    if (distanceToTarget != null) {
+                    // Line 4: Total distance — route distance when available (changes
+                    // with toggle), otherwise straight-line fallback.
+                    val totalDistance = routeDistance ?: distanceToTarget
+                    if (totalDistance != null) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            "Total: ${formatDistance(distanceToTarget)}",
+                            text = "Total: ${formatDistance(totalDistance)}",
                             fontSize = 14.sp,
                             color = ComposeColor(0xFF88FF88),
                             fontWeight = FontWeight.SemiBold
@@ -798,25 +797,14 @@ fun MarcoMap(
             }
         }
 
-        // ── Zoom + follow-me controls (bottom-right) ──
+        // ── Zoom controls (bottom-right) ──
         val onCheckmark = hapticClick { onCheckmarkClick?.invoke() }
-        val onFollowMe = hapticClick {
-            followMe = !followMe
-            if (followMe) {
-                val bearing = -(ownBearing ?: 0f)
-                prevOrientation = bearing
-                mapView.value?.setMapOrientation(bearing)
-                if (ownLat != null && ownLng != null) {
-                    mapView.value?.controller?.animateTo(GeoPoint(ownLat, ownLng))
-                }
-            }
-        }
         val onZoomIn = hapticClick { mapView.value?.controller?.zoomIn() }
         val onZoomOut = hapticClick { mapView.value?.controller?.zoomOut() }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 10.dp, bottom = 28.dp),
+                .padding(end = 10.dp, bottom = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Green checkmark — manual found when partner ≤30m
@@ -841,43 +829,6 @@ fun MarcoMap(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
-
-            // Follow-me button — green accent when engaged
-            val folGreen = ComposeColor(0xFF88FF88)
-            val folDim = ComposeColor(0xFF888888)
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(ComposeColor(0xDD000000))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onFollowMe() },
-                contentAlignment = Alignment.Center
-            ) {
-                // Circle-dot icon (green when engaged, gray when idle)
-                val folColor = if (followMe) folGreen else folDim
-                Box(
-                    modifier = Modifier.size(22.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .background(folColor, CircleShape)
-                            .padding(3.dp)
-                            .background(ComposeColor(0xDD000000), CircleShape)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(folColor, CircleShape)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             // Zoom in
             Box(
@@ -912,15 +863,24 @@ fun MarcoMap(
             }
         }
 
-        // Centered loading spinner
+        // Full dark overlay with centered spinner while map tiles load
         if (!mapReady) {
-            CircularProgressIndicator(
+            Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxSize(0.12f),
-                color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 3.dp
-            )
+                    .fillMaxSize()
+                    .background(ComposeColor(0xFF1C1C1C))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { /* block touches */ },
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(48.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 4.dp
+                )
+            }
         }
     }
 }

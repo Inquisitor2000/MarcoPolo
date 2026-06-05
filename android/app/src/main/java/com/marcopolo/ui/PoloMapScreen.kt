@@ -7,14 +7,21 @@ import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +52,7 @@ fun PoloMapScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val mapState by viewModel.mapState.collectAsState()
+    val useFootpath by viewModel.useFootpath.collectAsState()
     // Start location foreground service (requires location permission already granted)
     fun startLocationService() {
         val intent = Intent(context, LocationService::class.java)
@@ -73,14 +81,9 @@ fun PoloMapScreen(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         if (!hasFine) {
-            val permissionsToRequest = mutableListOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+            locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
             )
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            locationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         } else {
             startLocationService()
             viewModel.onPermissionsGranted()
@@ -90,34 +93,49 @@ fun PoloMapScreen(
     // ── Permission gate: app content only renders after permission granted ──
     if (!uiState.permissionsReady) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF1C1C1C)),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.padding(horizontal = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = "Location permission required",
+                    "Location Required",
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 24.dp)
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "This app needs location access to find your partner.",
+                    "Marco Polo needs precise location to find each other.",
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 32.dp)
+                    color = Color.White.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = hapticClick {
-                    val permissionsToRequest2 = mutableListOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
+                Spacer(modifier = Modifier.height(28.dp))
+                Button(
+                    onClick = hapticClick {
+                        locationPermissionLauncher.launch(
+                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                        permissionsToRequest2.add(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                    locationPermissionLauncher.launch(permissionsToRequest2.toTypedArray())
-                }) {
-                    Text("Grant Permission")
+                ) {
+                    Text(
+                        "Grant Access",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
@@ -141,6 +159,7 @@ fun PoloMapScreen(
                     routeLatLngs = mapState.routeLatLngs,
                     routeSteps = mapState.routeSteps,
                     distanceToTarget = mapState.distanceToTarget,
+                    routeDistance = mapState.routeDistance,
                     compassAccuracy = mapState.compassAccuracy,
                     gpsAccuracy = mapState.gpsAccuracy,
                     showCheckmark = mapState.showCheckmark,
@@ -190,7 +209,73 @@ fun PoloMapScreen(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
-                        Spacer(modifier = Modifier.weight(1f))
+                        // ── Routing mode toggle (wider pill, animated thumb) ──
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val thumbOffset by animateDpAsState(
+                                targetValue = if (useFootpath) 0.dp else 40.dp,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(80.dp)
+                                    .height(32.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF88FF88).copy(alpha = 0.2f))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) { viewModel.setRoutingMode(!useFootpath) }
+                            ) {
+                                // Thumb (bottom layer — half-track pill slides behind icons)
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = thumbOffset)
+                                        .size(40.dp, 32.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(Color(0xFF88FF88))
+                                )
+                                // Walk icon (top layer — always visible over thumb)
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(start = 6.dp)
+                                        .size(26.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF1C1C1C)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DirectionsWalk,
+                                        contentDescription = "Footpath",
+                                        tint = if (useFootpath) Color(0xFF88FF88) else Color(0xFF666666),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                // Car icon (top layer — always visible over thumb)
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 6.dp)
+                                        .size(26.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF1C1C1C)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DirectionsCar,
+                                        contentDescription = "Street",
+                                        tint = if (useFootpath) Color(0xFF666666) else Color(0xFF88FF88),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             text = formatCountdown(uiState.remainingSeconds),
                             fontSize = 18.sp,

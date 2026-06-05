@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.marcopolo.service.LocationService
 import com.marcopolo.ui.HomeScreen
 import com.marcopolo.ui.MarcoScreen
 import com.marcopolo.ui.PoloConfigScreen
@@ -66,6 +67,21 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         // Update the snapshot state — Compose recomposes automatically
         _deepLinkCode.value = parseDeepLink(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // App visible — restore GPS + sensor at full rate.
+        // Cancels the 60s background reduction timer if running.
+        LocationService.onAppForeground()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // App no longer visible — start 60s grace timer.
+        // If app stays backgrounded, GPS + sensor are released.
+        // Quick transitions (rotation, deep link) cancel on next onStart.
+        LocationService.onAppBackground()
     }
 
     /** Extract room code from deep links:

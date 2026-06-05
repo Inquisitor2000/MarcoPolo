@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,9 +42,7 @@ fun HomeScreen(
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        permissionsViewModel.onResult(fineGranted || coarseGranted)
+        permissionsViewModel.onResult(permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false)
     }
 
     // Check & request permissions on first composition
@@ -55,12 +54,7 @@ fun HomeScreen(
             permissionsViewModel.onResult(true)
         } else {
             locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    *if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                        arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
-                )
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
             )
         }
     }
@@ -83,30 +77,40 @@ fun HomeScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Location permission required",
+                "Location Required",
                 style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 24.dp)
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Marco Polo needs location access to share your position with your partner and help you find each other in crowded spaces.",
+                "Marco Polo needs precise location to find each other.",
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 32.dp),
+                color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = hapticClick {
-                locationPermissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                        *if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                            arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
+            Spacer(modifier = Modifier.height(28.dp))
+            Button(
+                onClick = hapticClick {
+                    locationPermissionLauncher.launch(
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
                     )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(25.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
-            }) {
-                Text("Grant Permission")
+            ) {
+                Text(
+                    "Grant Access",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     } else {
