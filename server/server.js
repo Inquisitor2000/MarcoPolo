@@ -139,13 +139,12 @@ server.on("upgrade", (req, socket, head) => {
     if (!room.marco) {
       room.marco = ws;
       ws.role = "marco";
-      console.log(`[+] Marco joined room ${code}`);
     } else if (!room.polo) {
       room.polo = ws;
       ws.role = "polo";
-      console.log(`[+] Polo joined room ${code}`);
 
       // Both connected — notify them
+      console.log(`[+] Room ${code} fully packed`);
       sendJson(room.marco, { type: "partner_joined", role: "marco" });
       sendJson(room.polo, { type: "partner_joined", role: "polo" });
     } else {
@@ -164,24 +163,17 @@ server.on("upgrade", (req, socket, head) => {
         return;
       }
 
-      const role = ws.role || "unknown";
-      console.log(`[msg] ${role} in room ${code}: type=${msg.type}`);
-
       // Forward location, route, and session_complete messages to partner
       if (msg.type === "location" || msg.type === "route" || msg.type === "session_complete") {
         const target = ws === room.marco ? room.polo : room.marco;
         if (target && target.readyState === ws.OPEN) {
           msg.from = ws.role;
           sendJson(target, msg);
-          console.log(`[msg] forwarded ${msg.type} from ${role} to partner`);
-        } else {
-          console.log(`[msg] could not forward ${msg.type} — partner WS null or closed`);
         }
       }
     });
 
     ws.on("close", () => {
-      console.log(`[-] ${ws.role || "unknown"} left room ${code}`);
       if (ws === room.marco) room.marco = null;
       if (ws === room.polo) room.polo = null;
 
