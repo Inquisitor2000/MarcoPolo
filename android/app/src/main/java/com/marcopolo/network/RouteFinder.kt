@@ -2,6 +2,8 @@
 
 package com.marcopolo.network
 
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.marcopolo.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -75,6 +77,9 @@ object RouteFinder {
                     steps = steps
                 )
             } catch (e: Exception) {
+                if (!BuildConfig.DEBUG) {
+                    FirebaseCrashlytics.getInstance().recordException(e)
+                }
                 null
             }
         }

@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.marcopolo.R
 import com.marcopolo.service.LocationService
 import kotlinx.coroutines.delay
 import com.marcopolo.util.formatCountdown
@@ -104,14 +106,14 @@ fun PoloMapScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "Location Required",
+                    stringResource(R.string.perm_title),
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "Marco Polo needs precise location to find each other.",
+                    stringResource(R.string.perm_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center
@@ -133,7 +135,7 @@ fun PoloMapScreen(
                     )
                 ) {
                     Text(
-                        "Grant Access",
+                        stringResource(R.string.perm_grant),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -156,7 +158,7 @@ fun PoloMapScreen(
                     ownBearing = mapState.ownBearing,
                     partnerLat = mapState.partnerLat,
                     partnerLng = mapState.partnerLng,
-                    partnerRole = "Marco",
+                    partnerRole = stringResource(R.string.partner_role_marco),
                     routeLatLngs = mapState.routeLatLngs,
                     routeSteps = mapState.routeSteps,
                     distanceToTarget = mapState.distanceToTarget,
@@ -200,12 +202,12 @@ fun PoloMapScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = stringResource(R.string.cd_back),
                                 tint = Color.White
                             )
                         }
                         Text(
-                            text = "Polo",
+                            text = stringResource(R.string.title_polo),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -253,7 +255,7 @@ fun PoloMapScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DirectionsWalk,
-                                        contentDescription = "Footpath",
+                                        contentDescription = stringResource(R.string.cd_footpath),
                                         tint = if (useFootpath) Color(0xFF88FF88) else Color(0xFF666666),
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -270,7 +272,7 @@ fun PoloMapScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DirectionsCar,
-                                        contentDescription = "Street",
+                                        contentDescription = stringResource(R.string.cd_street),
                                         tint = if (useFootpath) Color(0xFF666666) else Color(0xFF88FF88),
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -336,7 +338,7 @@ fun PoloMapScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = stringResource(R.string.cd_back),
                                 tint = MaterialTheme.colorScheme.secondary
                             )
                         }
@@ -372,11 +374,11 @@ fun PoloMapScreen(
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
                                 val waitingMessage = if (mapState.ownLat == null && !mapState.hasPartnerLocation) {
-                                    "Acquiring GPS and waiting for Marco..."
+                                    stringResource(R.string.waiting_gps_and_marco)
                                 } else if (mapState.ownLat == null) {
-                                    "Acquiring GPS..."
+                                    stringResource(R.string.waiting_gps)
                                 } else {
-                                    "Waiting for Marco's location..."
+                                    stringResource(R.string.waiting_marco_location)
                                 }
                                 Text(
                                     text = waitingMessage,
@@ -385,7 +387,7 @@ fun PoloMapScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Room $roomCode",
+                                    text = stringResource(R.string.room_label, roomCode),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.secondary
@@ -422,13 +424,13 @@ fun PoloMapScreen(
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
                                 Text(
-                                    text = "Waiting for Marco to connect...",
+                                    text = stringResource(R.string.waiting_marco_connect),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Room $roomCode",
+                                    text = stringResource(R.string.room_label, roomCode),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.secondary
@@ -490,7 +492,7 @@ fun PoloMapScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            "Connection Lost",
+                            stringResource(R.string.connection_lost),
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
@@ -498,7 +500,7 @@ fun PoloMapScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            "Connection was interrupted by the other party.",
+                            stringResource(R.string.connection_lost_desc),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
@@ -518,11 +520,11 @@ fun PoloMapScreen(
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
-                            Text(
-                                "OK",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                        Text(
+                            stringResource(R.string.btn_ok),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         }
                     }
                 }

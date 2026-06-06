@@ -24,3 +24,6 @@
 # Keep OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**
+
+# Crashlytics — keep source file + line numbers for readable stack traces
+-keepattributes SourceFile,LineNumberTable

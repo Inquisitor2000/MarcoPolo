@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Marco Polo</string>
+    <string name="app_tagline">Find your friends location</string>
+    <string name="app_description">Marco creates a session · Polo joins with the code\nRealtime location sharing</string>
+
+    <string name="btn_marco">I\'m Marco</string>
+    <string name="btn_polo">I\'m Polo</string>
+    <string name="btn_connect">Connect</string>
+    <string name="btn_ok">OK</string>
+    <string name="btn_awesome">Awesome!</string>
+    <string name="btn_back">Back</string>
+
+    <string name="perm_title">Location Required</string>
+    <string name="perm_desc">Marco Polo needs precise location to find each other.</string>
+    <string name="perm_grant">Grant Access</string>
+
+    <string name="title_marco">Marco</string>
+    <string name="title_polo">Polo</string>
+    <string name="enter_code_title">Enter Marco\'s code</string>
+    <string name="enter_code_desc">Ask Marco for the 4-digit code\nto start the session</string>
+    <string name="code_placeholder">1234</string>
+
+    <string name="share_code">Share code with Polo</string>
+    <string name="share_invite">Invite Polo</string>
+    <string name="share_text">🐺 I say Marco, You say Polo.\n%s</string>
+
+    <string name="waiting_marco_connect">Waiting for Marco to connect…</string>
+    <string name="waiting_polo_connect">Waiting for Polo to connect…</string>
+    <string name="waiting_gps">Acquiring GPS…</string>
+    <string name="waiting_gps_and_polo">Acquiring GPS and waiting for Polo…</string>
+    <string name="waiting_gps_and_marco">Acquiring GPS and waiting for Marco…</string>
+    <string name="waiting_polo_location">Waiting for Polo\'s location…</string>
+    <string name="waiting_marco_location">Waiting for Marco\'s location…</string>
+    <string name="room_label">Room %s</string>
+
+    <string name="connection_lost">Connection Lost</string>
+    <string name="connection_lost_desc">Connection was interrupted by the other party.</string>
+
+    <string name="found_title">Congratulations!</string>
+    <string name="found_desc">You found each other!</string>
+
+    <string name="marker_you">You</string>
+    <string name="marker_partner">%s</string>
+
+    <string name="routing_footpath">Footpath</string>
+    <string name="routing_street">Street</string>
+
+    <string name="nav_arrive">Arrive</string>
+    <string name="nav_head">Head</string>
+    <string name="nav_head_towards">Head towards %s</string>
+    <string name="nav_straight">Straight</string>
+    <string name="nav_right_ahead">Right ahead</string>
+    <string name="nav_right">Right</string>
+    <string name="nav_right_back">Right back</string>
+    <string name="nav_back">Back</string>
+    <string name="nav_left_back">Left back</string>
+    <string name="nav_left">Left</string>
+    <string name="nav_left_ahead">Left ahead</string>
+    <string name="nav_total">Total</string>
+
+    <string name="dist_meters">%d m</string>
+    <string name="dist_kilometers">%.1f km</string>
+
+    <string name="cd_back">Back</string>
+    <string name="cd_footpath">Footpath</string>
+    <string name="cd_street">Street</string>
+    <string name="cd_share_room">Share room code</string>
+    <string name="cd_mark_found">Mark as found</string>
+    <string name="cd_zoom_in">Zoom in</string>
+    <string name="cd_zoom_out">Zoom out</string>
+
+    <string name="partner_role_polo">Polo</string>
+    <string name="partner_role_marco">Marco</string>
+</resources>

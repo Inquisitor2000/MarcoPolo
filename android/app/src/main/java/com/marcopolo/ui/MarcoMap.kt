@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +54,7 @@ import kotlin.math.sqrt
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.marcopolo.R
 import com.marcopolo.network.RouteStep
 import com.marcopolo.util.hapticClick
 import org.osmdroid.tileprovider.tilesource.ITileSource
@@ -542,7 +544,7 @@ fun MarcoMap(
                     // ── You marker (at GPS position, rotates with bearing) ──
                     youMarker = Marker(this).apply {
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        title = "You"
+                        title = ctx.getString(R.string.marker_you)
                         setFlat(true)
                     }
                     overlays.add(youMarker)
@@ -614,7 +616,6 @@ fun MarcoMap(
                         partnerMarker?.apply {
                             position = GeoPoint(partnerLat, partnerLng)
                             isEnabled = true
-                            title = partnerRole
                             icon = partnerDrawable
                         }
                         prevPartnerLat = partnerLat
@@ -786,8 +787,8 @@ fun MarcoMap(
                     val totalDistance = routeDistance ?: distanceToTarget
                     if (totalDistance != null) {
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Total: ${formatDistance(totalDistance)}",
+                    Text(
+                        text = "${stringResource(R.string.nav_total)}: ${formatDistance(totalDistance)}",
                             fontSize = 14.sp,
                             color = ComposeColor(0xFF88FF88),
                             fontWeight = FontWeight.SemiBold
@@ -822,7 +823,7 @@ fun MarcoMap(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "Mark as found",
+                        contentDescription = stringResource(R.string.cd_mark_found),
                         tint = ComposeColor.White,
                         modifier = Modifier.size(28.dp)
                     )

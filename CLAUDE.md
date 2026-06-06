@@ -43,9 +43,11 @@
 - **Permission screen flash on cleanup** (FIXED). `cleanup()` reset `_uiState` with default `permissionsReady = false`, causing 1-2 frame flash of permission gate when showing disconnect dialog. Fix: `MarcoUiState(permissionsReady = true)` / `PoloUiState(permissionsReady = true)` on cleanup.
 - **Disconnect dialog room-code flash** (FIXED). OK button in disconnect dialog called `cleanup()` which reset UI state to default (room code screen). For 1-2 frames before `popBackStack` navigated home, user saw room-code screen. Fix: OK button calls `onBack()` (nav pop) first; cleanup deferred to `ViewModel.onCleared()` which fires when nav entry is popped. Applied to both MarcoScreen and PoloMapScreen.
 - **Routing mode toggle layout shift** (FIXED). Countdown timer `formatCountdown()` text changed pixel width each tick (proportional font → different digit widths). The `weight(1f)` Box holding the routing toggle in the header Row absorbed the slack, shifting the toggle every second. Fix: wrap countdown in `Box(width=80.dp)` + `FontFamily.Monospace` for constant width.
+- **AndroidView ctx scope** (KNOWN). `ctx` from `factory = { ctx -> }` is NOT available in `update = { view -> }`. Use `view.context` in update block or do one-time work in factory.
 
 ## Architecture
 - **No cloud accounts/API keys** — osmdroid + CartoDB Voyager tiles (free, no key)
+- **Multi-language**: EN/RO/RU runtime switching. `LocaleManager` persists choice to SharedPreferences. `MainActivity.attachBaseContext()` wraps Context with saved locale. `LanguageSwitcher` (circular green border, top-right of home screen, no fill, cycles EN→RO→RU→EN) triggers `activity.recreate()` on tap. All user-facing strings in `values/strings.xml` (EN), `values-ro/` (RO), `values-ru/` (RU). Russian uses Cyrillic (Марко Поло, Марко, Поло). Nav instruction strings in resources but `computeNavInstruction()` still uses hardcoded English (needs context param).
 - **Relay**: `https://marcopolo-relay.onrender.com` (WebSocket relay for room/location sharing)
 - **Server thinness**: ~80 lines of logic. Pure dumb pipe — no OSRM, no persistence, no auth. In-memory Map, 17min TTL cleanup. ~0.8 MB per 15-min session (bidirectional). Free tier handles ~4000 MAU / 200 peak concurrent rooms before bandwidth becomes first limit (~100 GB/mo).
 - **Routing**: Two OSRM modes toggleable per-device via header Switch. Both modes free, no key:
@@ -68,6 +70,8 @@
 - `LocationService.kt` — foreground service, FusedLocationProviderClient, compass via rotation sensor, `getLastLocation()` fallback, GPS 3s min interval, compass SENSOR_DELAY_NORMAL (200ms).
 - `PermissionsViewModel.kt` — PENDING/GRANTED/DENIED state machine for location permission
 - `HapticClick.kt` — `hapticClick()` composable wrapper for all 15 interactive buttons
+- `LocaleManager.kt` — SharedPreferences-backed locale persistence. `getSavedLocale()`, `setLocale()`, `updateLocale()`. Used by `MainActivity.attachBaseContext()` and `LanguageSwitcher`.
+- `LanguageSwitcher.kt` — Circular 36dp green-bordered button at top-right of home screen. Shows current lang code (EN/RO/RU). Click cycles to next, calls `LocaleManager.setLocale()` + `activity.recreate()`. Haptic on tap.
 - `HomeScreen.kt` — permission gate + role selection + found dialog rendering (full-screen Box overlay)
 - `PoloConfigScreen.kt` — room code input with `OutlinedTextField`, "Connect" button, `RoundedCornerShape(12.dp)`
 - `MainActivity.kt` — osmdroid init (cache 25MB, threads 2), deep link support, `MarcoPoloNavGraph` with shared `foundDialogShown` state + `onFound` lambda
@@ -93,9 +97,26 @@ Three states per screen (once permissions granted):
 - `foundDialogEnabledAtMs` set to `currentTimeMillis + 20s` on `partner_joined`. Found dialog suppressed until time elapses.
 - **pointToPolylineDistance coordinate swap** (FIXED). `pointToPolylineDistance()` extracted segment endpoints as `(lng, lat)` while user position was `(userLat, userLng)` — mixed lat with lng in `pointToSegmentDistance`. Produced garbage distances. On simulator (perfect coordinates) relative ordering stayed accidentally correct. On real GPS (noisy), amplified jitter into wrong step selection, consistently showing next street. Fix: extract as `(lat, lng)` consistent with user position.
 
+## Firebase Configuration
+- **Dependencies**: Firebase BoM 34.14.0, Analytics, Crashlytics (`com.google.gms:google-services:4.4.4`, `com.google.firebase:firebase-crashlytics-gradle:3.0.7`)
+- **Project**: `marco-polo-44ee3` (project number: 992041143673), package: `com.marcopolo`
+- **Config file**: `android/app/google-services.json`
+- **Gating**: All Firebase calls guarded with `if (!BuildConfig.DEBUG)` — release-only
+- **Auto screen tracking**: Not disabled (negligible — 3 screens). We only log 6 custom events.
+- **Custom events** (6 total, same on Marco + Polo):
+  - `room_created` (Marco) / `room_joined` (Polo) — session start
+  - `partner_connected` — WebSocket session active
+  - `navigation_started` — partner revealed (distance >10m)
+  - `connection_lost` — with `reason` param: `partner_disconnected` or `connection_error`
+  - `session_complete` — found dialog shown
+- **Crashlytics**: `recordException()` on OSRM failures, WS createRoom failures, WebSocket onFailure callbacks
+- **ProGuard**: `-keepattributes SourceFile,LineNumberTable` for readable stack traces
+- **BuildConfig**: `buildFeatures.buildConfig = true` must stay enabled (used for debug gating)
+- **APK impact**: +1.4MB (4.4MB → 5.8MB after R8 tree-shaking)
+
 ## Future Features
 - **GraphHopper for footpath mode**: Current footpath mode uses OSRM `routed-foot` instance. GraphHopper `foot` profile has dedicated pedestrian network with better path coverage (especially Eastern Europe). Would need API key (free tier: 500 req/day). Would replace the `routing.openstreetmap.de/routed-foot` URL in RouteFinder.kt when `useFootpath=true`. GraphHopper provides pre-formatted instruction text (no more `generateInstruction()`).
+- **Server-side Firebase Analytics**: Server events from `server.js` on room created (+ code hash), fully packed, and session_complete forwarded.
 
 ## TODO
 - **App icon**: Current icon is the default Android icon. Replace with branded Marco Polo logo.
-- **Firebase Analytics**: Service monitoring dashboard (rooms created, rooms completed/found, activity). No user tracking. Android Firebase SDK + server-side events emitted from server.js on room created (+ code hash), fully packed, and session_complete forwarded.

@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.marcopolo.R
 import com.marcopolo.service.LocationService
 import kotlinx.coroutines.delay
 import com.marcopolo.util.formatCountdown
@@ -98,14 +100,14 @@ fun MarcoScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "Location Required",
+                    stringResource(R.string.perm_title),
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "Marco Polo needs precise location to find each other.",
+                    stringResource(R.string.perm_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center
@@ -127,7 +129,7 @@ fun MarcoScreen(
                     )
                 ) {
                     Text(
-                        "Grant Access",
+                        stringResource(R.string.perm_grant),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -150,7 +152,7 @@ fun MarcoScreen(
                     ownBearing = mapState.ownBearing,
                     partnerLat = mapState.partnerLat,
                     partnerLng = mapState.partnerLng,
-                    partnerRole = "Polo",
+                    partnerRole = stringResource(R.string.partner_role_polo),
                     routeLatLngs = mapState.routeLatLngs,
                     routeSteps = mapState.routeSteps,
                     distanceToTarget = mapState.distanceToTarget,
@@ -194,12 +196,12 @@ fun MarcoScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = stringResource(R.string.cd_back),
                                 tint = Color.White
                             )
                         }
                         Text(
-                            text = "Marco",
+                            text = stringResource(R.string.title_marco),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -247,7 +249,7 @@ fun MarcoScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DirectionsWalk,
-                                        contentDescription = "Footpath",
+                                        contentDescription = stringResource(R.string.cd_footpath),
                                         tint = if (useFootpath) Color(0xFF88FF88) else Color(0xFF666666),
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -264,7 +266,7 @@ fun MarcoScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DirectionsCar,
-                                        contentDescription = "Street",
+                                        contentDescription = stringResource(R.string.cd_street),
                                         tint = if (useFootpath) Color(0xFF666666) else Color(0xFF88FF88),
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -319,9 +321,9 @@ fun MarcoScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = "Marco"
-                        )
+                    Text(
+                        text = stringResource(R.string.title_marco)
+                    )
                     },
                     navigationIcon = {
                         IconButton(onClick = hapticClick {
@@ -330,7 +332,7 @@ fun MarcoScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = stringResource(R.string.cd_back),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -366,11 +368,11 @@ fun MarcoScreen(
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
                                 val waitingMessage = if (mapState.ownLat == null && !mapState.hasPartnerLocation) {
-                                    "Acquiring GPS and waiting for Polo..."
+                                    stringResource(R.string.waiting_gps_and_polo)
                                 } else if (mapState.ownLat == null) {
-                                    "Acquiring GPS..."
+                                    stringResource(R.string.waiting_gps)
                                 } else {
-                                    "Waiting for Polo's location..."
+                                    stringResource(R.string.waiting_polo_location)
                                 }
                                 Text(
                                     text = waitingMessage,
@@ -411,7 +413,7 @@ fun MarcoScreen(
 
                                 if (uiState.roomCode != null) {
                                     Text(
-                                        text = "Share code with Polo",
+                                        text = stringResource(R.string.share_code),
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                                     )
@@ -436,23 +438,23 @@ fun MarcoScreen(
                                                     action = Intent.ACTION_SEND
                                                     putExtra(
                                                         Intent.EXTRA_TEXT,
-                                                        "🐺 I say Marco, You say Polo.\nhttps://marcopolo-relay.onrender.com/join/${uiState.roomCode}"
+                                                        context.getString(R.string.share_text, "https://marcopolo-relay.onrender.com/join/${uiState.roomCode}")
                                                     )
                                                     type = "text/plain"
                                                 }
-                                                context.startActivity(Intent.createChooser(shareIntent, "Invite Polo"))
+                                                context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.share_invite)))
                                             }
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Share,
-                                                contentDescription = "Share room code",
+                                                contentDescription = stringResource(R.string.cd_share_room),
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
-                                        text = "Waiting for Polo to connect...",
+                                        text = stringResource(R.string.waiting_polo_connect),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
                                     )
@@ -523,7 +525,7 @@ fun MarcoScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            "Connection Lost",
+                            stringResource(R.string.connection_lost),
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
@@ -531,7 +533,7 @@ fun MarcoScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            "Connection was interrupted by the other party.",
+                            stringResource(R.string.connection_lost_desc),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
@@ -551,11 +553,11 @@ fun MarcoScreen(
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
-                            Text(
-                                "OK",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                        Text(
+                            stringResource(R.string.btn_ok),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         }
                     }
                 }

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Марко Поло</string>
+    <string name="app_tagline">Найди местоположение друзей</string>
+    <string name="app_description">Марко создаёт сессию · Поло подключается по коду\nОбмен местоположением в реальном времени</string>
+
+    <string name="btn_marco">Я Марко</string>
+    <string name="btn_polo">Я Поло</string>
+    <string name="btn_connect">Подключиться</string>
+    <string name="btn_ok">OK</string>
+    <string name="btn_awesome">Отлично!</string>
+    <string name="btn_back">Назад</string>
+
+    <string name="perm_title">Требуется местоположение</string>
+    <string name="perm_desc">Марко Поло требуется точное местоположение, чтобы найти друг друга.</string>
+    <string name="perm_grant">Предоставить доступ</string>
+
+    <string name="title_marco">Марко</string>
+    <string name="title_polo">Поло</string>
+    <string name="enter_code_title">Введите код Марко</string>
+    <string name="enter_code_desc">Попросите у Марко 4-значный код,\nчтобы начать сессию</string>
+    <string name="code_placeholder">1234</string>
+
+    <string name="share_code">Поделиться кодом с Поло</string>
+    <string name="share_invite">Пригласить Поло</string>
+    <string name="share_text">🐺 Я говорю Марко, ты говоришь Поло.\n%s</string>
+
+    <string name="waiting_marco_connect">Ожидание подключения Марко…</string>
+    <string name="waiting_polo_connect">Ожидание подключения Поло…</string>
+    <string name="waiting_gps">Получение GPS…</string>
+    <string name="waiting_gps_and_polo">Получение GPS и ожидание Поло…</string>
+    <string name="waiting_gps_and_marco">Получение GPS и ожидание Марко…</string>
+    <string name="waiting_polo_location">Ожидание местоположения Поло…</string>
+    <string name="waiting_marco_location">Ожидание местоположения Марко…</string>
+    <string name="room_label">Комната %s</string>
+
+    <string name="connection_lost">Соединение потеряно</string>
+    <string name="connection_lost_desc">Соединение было прервано другим участником.</string>
+
+    <string name="found_title">Поздравляем!</string>
+    <string name="found_desc">Вы нашли друг друга!</string>
+
+    <string name="marker_you">Вы</string>
+    <string name="marker_partner">%s</string>
+
+    <string name="routing_footpath">Пешком</string>
+    <string name="routing_street">По дороге</string>
+
+    <string name="nav_arrive">Прибытие</string>
+    <string name="nav_head">Направление</string>
+    <string name="nav_head_towards">Направление к %s</string>
+    <string name="nav_straight">Прямо</string>
+    <string name="nav_right_ahead">Чуть правее</string>
+    <string name="nav_right">Направо</string>
+    <string name="nav_right_back">Направо назад</string>
+    <string name="nav_back">Назад</string>
+    <string name="nav_left_back">Налево назад</string>
+    <string name="nav_left">Налево</string>
+    <string name="nav_left_ahead">Чуть левее</string>
+    <string name="nav_total">Всего</string>
+
+    <string name="dist_meters">%d м</string>
+    <string name="dist_kilometers">%.1f км</string>
+
+    <string name="cd_back">Назад</string>
+    <string name="cd_footpath">Пешком</string>
+    <string name="cd_street">По дороге</string>
+    <string name="cd_share_room">Поделиться кодом комнаты</string>
+    <string name="cd_mark_found">Отметить как найденного</string>
+    <string name="cd_zoom_in">Приблизить</string>
+    <string name="cd_zoom_out">Отдалить</string>
+
+    <string name="partner_role_polo">Поло</string>
+    <string name="partner_role_marco">Марко</string>
+</resources>

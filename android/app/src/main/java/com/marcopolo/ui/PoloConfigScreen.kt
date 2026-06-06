@@ -10,12 +10,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.marcopolo.R
 import com.marcopolo.util.hapticClick
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,12 +31,12 @@ fun PoloConfigScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Polo") },
+                title = { Text(stringResource(R.string.title_polo)) },
                 navigationIcon = {
                     IconButton(onClick = hapticClick(onBack)) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.cd_back),
                             tint = MaterialTheme.colorScheme.secondary
                         )
                     }
@@ -54,7 +56,7 @@ fun PoloConfigScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Enter Marco's code",
+                text = stringResource(R.string.enter_code_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -63,7 +65,7 @@ fun PoloConfigScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Ask Marco for the 4-digit code\nto start the session",
+                text = stringResource(R.string.enter_code_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center
@@ -84,7 +86,7 @@ fun PoloConfigScreen(
                 singleLine = true,
                     placeholder = {
                         Text(
-                            text = "1234",
+                            text = stringResource(R.string.code_placeholder),
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -120,7 +122,7 @@ fun PoloConfigScreen(
                 )
             ) {
                 Text(
-                    text = "Connect",
+                    text = stringResource(R.string.btn_connect),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )

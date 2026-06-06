@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Marco Polo</string>
+    <string name="app_tagline">Găsește locația prietenilor</string>
+    <string name="app_description">Marco creează o sesiune · Polo se conectează cu codul\nPartajare locație în timp real</string>
+
+    <string name="btn_marco">Sunt Marco</string>
+    <string name="btn_polo">Sunt Polo</string>
+    <string name="btn_connect">Conectare</string>
+    <string name="btn_ok">OK</string>
+    <string name="btn_awesome">Super!</string>
+    <string name="btn_back">Înapoi</string>
+
+    <string name="perm_title">Locație necesară</string>
+    <string name="perm_desc">Marco Polo are nevoie de locația ta precisă pentru a vă găsi.</string>
+    <string name="perm_grant">Permite accesul</string>
+
+    <string name="title_marco">Marco</string>
+    <string name="title_polo">Polo</string>
+    <string name="enter_code_title">Introdu codul lui Marco</string>
+    <string name="enter_code_desc">Cere-i lui Marco codul de 4 cifre\npentru a începe sesiunea</string>
+    <string name="code_placeholder">1234</string>
+
+    <string name="share_code">Partajează codul cu Polo</string>
+    <string name="share_invite">Invită-l pe Polo</string>
+    <string name="share_text">🐺 Eu spun Marco, tu spui Polo.\n%s</string>
+
+    <string name="waiting_marco_connect">Se așteaptă conectarea lui Marco…</string>
+    <string name="waiting_polo_connect">Se așteaptă conectarea lui Polo…</string>
+    <string name="waiting_gps">Se achiziționează GPS…</string>
+    <string name="waiting_gps_and_polo">Se achiziționează GPS și se așteaptă Polo…</string>
+    <string name="waiting_gps_and_marco">Se achiziționează GPS și se așteaptă Marco…</string>
+    <string name="waiting_polo_location">Se așteaptă locația lui Polo…</string>
+    <string name="waiting_marco_location">Se așteaptă locația lui Marco…</string>
+    <string name="room_label">Camera %s</string>
+
+    <string name="connection_lost">Conexiune pierdută</string>
+    <string name="connection_lost_desc">Conexiunea a fost întreruptă de către cealaltă persoană.</string>
+
+    <string name="found_title">Felicitări!</string>
+    <string name="found_desc">V-ați găsit!</string>
+
+    <string name="marker_you">Tu</string>
+    <string name="marker_partner">%s</string>
+
+    <string name="routing_footpath">Pietonal</string>
+    <string name="routing_street">Stradă</string>
+
+    <string name="nav_arrive">Sosire</string>
+    <string name="nav_head">Direcția</string>
+    <string name="nav_head_towards">Direcția %s</string>
+    <string name="nav_straight">Înainte</string>
+    <string name="nav_right_ahead">Ușor dreapta</string>
+    <string name="nav_right">Dreapta</string>
+    <string name="nav_right_back">Înapoi dreapta</string>
+    <string name="nav_back">Înapoi</string>
+    <string name="nav_left_back">Înapoi stânga</string>
+    <string name="nav_left">Stânga</string>
+    <string name="nav_left_ahead">Ușor stânga</string>
+    <string name="nav_total">Total</string>
+
+    <string name="dist_meters">%d m</string>
+    <string name="dist_kilometers">%.1f km</string>
+
+    <string name="cd_back">Înapoi</string>
+    <string name="cd_footpath">Pietonal</string>
+    <string name="cd_street">Stradă</string>
+    <string name="cd_share_room">Partajează codul camerei</string>
+    <string name="cd_mark_found">Marchează ca găsit</string>
+    <string name="cd_zoom_in">Mărește</string>
+    <string name="cd_zoom_out">Micșorează</string>
+
+    <string name="partner_role_polo">Polo</string>
+    <string name="partner_role_marco">Marco</string>
+</resources>

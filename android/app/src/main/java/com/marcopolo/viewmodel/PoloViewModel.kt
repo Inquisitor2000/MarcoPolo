@@ -4,9 +4,13 @@ import android.app.Application
 import android.content.Intent
 import android.hardware.SensorManager
 import android.location.Location
+import android.os.Bundle
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.marcopolo.BuildConfig
 import com.marcopolo.network.RelayClient
 import com.marcopolo.network.RouteFinder
 import com.marcopolo.network.RouteResult
@@ -124,6 +128,17 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
     private val _useFootpath = MutableStateFlow(prefs.getBoolean("routing_footpath", true))
     val useFootpath: StateFlow<Boolean> = _useFootpath.asStateFlow()
 
+    // Firebase Analytics + Crashlytics (release only)
+    private val analytics: FirebaseAnalytics? = if (!BuildConfig.DEBUG) {
+        FirebaseAnalytics.getInstance(getApplication())
+    } else null
+    private val crashlytics: FirebaseCrashlytics? = if (!BuildConfig.DEBUG) {
+        FirebaseCrashlytics.getInstance()
+    } else null
+
+    /** Ensures navigation_started fires only once per session */
+    private var navigationStartedFired: Boolean = false
+
     fun setRoutingMode(footpath: Boolean) {
         _useFootpath.value = footpath
         prefs.edit().putBoolean("routing_footpath", footpath).apply()
@@ -151,6 +166,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.roomCode != null) return
         _uiState.update { it.copy(roomCode = code) }
 
+        analytics?.logEvent("room_joined", null)
         relayClient.connect(code)
         listenForMessages()
     }
@@ -227,6 +243,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                 foundDialogEnabledAtMs = System.currentTimeMillis() + 20_000
                             )
                         }
+                        analytics?.logEvent("partner_connected", null)
                         startCountdown()
                         onLocationReady()
                     }
@@ -244,6 +261,9 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                 if (dist != null && dist <= FOUND_THRESHOLD_M && timeOk) {
                                     current.copy(showFoundDialog = true)
                                 } else {
+                                    analytics?.logEvent("connection_lost", Bundle().apply {
+                                        putString("reason", "partner_disconnected")
+                                    })
                                     current.copy(
                                         isActive = false,
                                         error = "Marco disconnected",
@@ -320,6 +340,11 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                     displayedRoutePartnerLat = null
                                     displayedRoutePartnerLng = null
                                 }
+                                // Fire navigation_started once when partner enters visible range
+                                if (isRevealTransition && !navigationStartedFired) {
+                                    navigationStartedFired = true
+                                    analytics?.logEvent("navigation_started", null)
+                                }
                                 // Request route calculation using raw partner coords
                                 requestRouteUpdate(force = revealed)
                             }
@@ -327,6 +352,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     "session_complete" -> {
                         // Partner manually marked session as complete
+                        analytics?.logEvent("session_complete", null)
                         _uiState.update { it.copy(showFoundDialog = true) }
                     }
                     "route" -> {
@@ -350,6 +376,9 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     "error", "disconnected" -> {
+                        analytics?.logEvent("connection_lost", Bundle().apply {
+                            putString("reason", "connection_error")
+                        })
                         _uiState.update { it.copy(error = "Connection lost") }
                     }
                 }
@@ -370,6 +399,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
     /** Manually mark the session as complete. Sends notification to partner
      *  and triggers the congratulations dialog on both sides. */
     fun completeSession() {
+        analytics?.logEvent("session_complete", null)
         _uiState.update { it.copy(showFoundDialog = true) }
         relayClient.sendSessionComplete()
     }

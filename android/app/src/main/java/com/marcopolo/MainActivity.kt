@@ -1,5 +1,6 @@
 package com.marcopolo
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -20,8 +21,15 @@ import com.marcopolo.ui.MarcoScreen
 import com.marcopolo.ui.PoloConfigScreen
 import com.marcopolo.ui.PoloMapScreen
 import com.marcopolo.ui.theme.MarcoPoloTheme
+import com.marcopolo.util.LocaleManager
 
 class MainActivity : ComponentActivity() {
+
+    override fun attachBaseContext(newBase: Context?) {
+        val base = newBase ?: return super.attachBaseContext(newBase)
+        val lang = LocaleManager.getSavedLocale(base)
+        super.attachBaseContext(LocaleManager.updateLocale(base, lang))
+    }
 
     // Snapshot state shared between Activity and composables.
     // Updated from deep links, consumed by the nav graph.
