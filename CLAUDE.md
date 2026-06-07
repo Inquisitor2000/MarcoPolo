@@ -52,8 +52,9 @@
 ## Architecture
 - **No cloud accounts/API keys** — osmdroid + CartoDB Voyager tiles (free, no key)
 - **Multi-language**: EN/RO/RU runtime switching. `LocaleManager` persists choice to SharedPreferences. `MainActivity.attachBaseContext()` wraps Context with saved locale. `LanguageSwitcher` (circular green border, top-right of home screen, no fill, cycles EN→RO→RU→EN) triggers `activity.recreate()` on tap. All user-facing strings in `values/strings.xml` (EN), `values-ro/` (RO), `values-ru/` (RU). Russian uses Cyrillic (Марко Поло, Марко, Поло). Nav instruction strings in resources but `computeNavInstruction()` still uses hardcoded English (needs context param).
-- **Relay**: `https://marcopolo-relay.onrender.com` (WebSocket relay for room/location sharing)
+- **Relay**: `https://marcopolo-relay.onrender.com` (WebSocket relay for room/location sharing). Runs on Render free tier. Cron job (cron-job.org, 5min interval) pings `/health` to prevent Render free-tier spin-down (15min idle timeout). Fully functional at current scale.
 - **Server thinness**: ~80 lines of logic. Pure dumb pipe — no OSRM, no persistence, no auth. In-memory Map, 17min TTL cleanup. ~0.8 MB per 15-min session (bidirectional). Free tier handles ~4000 MAU / 200 peak concurrent rooms before bandwidth becomes first limit (~100 GB/mo).
+- **Scaling**: If app gains traction, move to a paid Render instance or self-host on a VPS. The server is stateless — horizontal scaling only needs a shared Redis pub/sub for cross-instance room state.
 - **Routing**: See [Routing](#Routing) section below for OSRM endpoints, usage, and GraphHopper evaluation.
 - **Found dialog**: Shared `mutableStateOf(false)` in `MarcoPoloNavGraph` (MainActivity.kt). Game screens call `onFound()` → sets flag + `popBackStack("home")`. HomeScreen renders congratulation full-screen `Box` overlay on top. "Awesome!" calls `onDismissFound()` to clear flag.
 - **Distance haptics**: `VIRTUAL_KEY` haptic fires once per milestone (1000, 500, 250, 125, 75, 50 m) when crossing closer. Tracked in `remember { mutableSetOf<Int>() }`. Found dialog gets `CONFIRM` haptic.
