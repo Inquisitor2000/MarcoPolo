@@ -113,4 +113,12 @@ Three states per screen (once permissions granted):
 - **Phase 3** — Skipped: Render.com relay is fine. Self-hosting already documented in `server/DEPLOY.md`. `ServerConfig.kt` has a single `DEFAULT_URL` to change.
 - **Phase 4** — Skipped: `com.marcopolo` is F-Droid-compatible; rename breaks in-place updates for existing users
 - **Phase 5 ✓** — SPDX license headers (GPL-3.0-or-later) in all 33 source files (19 Kotlin, 10 XML, 3 Gradle, 1 JS) + LICENSE file
-- **Phase 6** — App icon + metadata for F-Droid listing
+- **Phase 6 ✓** — App icon (Gemini-generated, PNG-based, no vectors). Extracted green elements for dark splash. See [Icons](#Icons) below.
+
+## Icons
+- **Source**: `New icon copy.png` (1024×1024, circular with transparent corners, green pin + dot on dark badge)
+- **Launcher**: Adaptive icon via `mipmap-anydpi/ic_launcher.xml` → `drawable/ic_launcher_foreground.png` (PNG, resized to 192px) over transparent `drawable/ic_launcher_background.png`. Content shrunk to 66% safe zone to avoid device-mask clipping.
+- **Legacy mipmaps**: 5 densities (mdpi 48px → xxxhdpi 192px) as standalone PNGs in each density folder.
+- **Splash**: `drawable/splash_screen.xml` — `layer-list` with dark `#1C1C1C` bg + centered `drawable/splash_icon.png`. Green elements extracted via HSV saturation/green-hue filter (hue 80-170°, sat > 0.35, value > 0.35). Dark-green antialiased rim pixels stripped for clean edge on dark bg.
+- **Splash theme**: `Theme.MarcoPolo.Splash` in `styles.xml`, set on MainActivity in manifest. `MainActivity.onCreate()` calls `setTheme(R.style.Theme.MarcoPolo)` before `super.onCreate()` to switch to main theme post-splash.
+- **Old vector XMLs deleted**: `ic_launcher_background.xml`, `ic_launcher_foreground.xml`, `ic_launcher_monochrome.xml` removed. No monochrome icon for Android 13+ themed icons (not generated yet).

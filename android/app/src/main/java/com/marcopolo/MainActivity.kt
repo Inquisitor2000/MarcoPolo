@@ -39,6 +39,10 @@ class MainActivity : ComponentActivity() {
     private val _deepLinkCode = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Switch from splash theme to main theme before super.onCreate
+        // so the splash drawable (icon on dark bg) is shown during cold start,
+        // then seamlessly transitions to the main activity theme.
+        setTheme(R.style.Theme_MarcoPolo)
         super.onCreate(savedInstanceState)
 
         // Edge-to-edge: draw behind system bars so the map fills the entire screen.

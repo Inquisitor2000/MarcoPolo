@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Marco Polo Authors -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Dark background -->
+    <item android:drawable="@color/splash_background"/>
+
+    <!-- Centered icon (scaled to ~40% of screen) -->
+    <item
+        android:width="144dp"
+        android:height="144dp"
+        android:gravity="center">
+        <bitmap
+            android:src="@drawable/splash_icon"
+            android:gravity="center"/>
+    </item>
+</layer-list>

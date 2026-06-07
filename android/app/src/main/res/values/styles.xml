@@ -6,4 +6,9 @@
         <item name="android:statusBarColor">#FF1A1A2E</item>
         <item name="android:navigationBarColor">#FF1A1A2E</item>
     </style>
+
+    <!-- Splash screen shown on cold launch before Activity renders -->
+    <style name="Theme.MarcoPolo.Splash" parent="Theme.MarcoPolo">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+    </style>
 </resources>
