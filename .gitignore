@@ -1,7 +1,7 @@
 # Android build artifacts
 android/app/build/
 android/.gradle/
-android/.idea/
+.idea/
 *.apk
 *.ap_
 *.dex
@@ -52,3 +52,6 @@ android/styles.css
 
 # Auto-generated Gradle daemon config
 android/gradle/gradle-daemon-jvm.properties
+
+# Local scripts / tools
+scripts/
