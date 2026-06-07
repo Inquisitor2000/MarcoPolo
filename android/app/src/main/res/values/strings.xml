@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Marco Polo Authors -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
     <string name="app_name">Marco Polo</string>
     <string name="app_tagline">Find your friends location</string>

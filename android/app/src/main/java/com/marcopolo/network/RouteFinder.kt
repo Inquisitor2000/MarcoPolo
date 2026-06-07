@@ -1,9 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Marco Polo Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 @file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
 
 package com.marcopolo.network
 
-import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.marcopolo.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -13,9 +14,16 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 /**
- * OSRM (Open Source Routing Machine) client for walking directions.
- * Only Marco calls this — results are sent over WebSocket to Polo.
- * Only walking mode is supported (no car).
+ * OSRM (Open Source Routing Machine) client for foot/car routing.
+ * Both Marco and Polo call OSRM independently with their own GPS position as origin.
+ *
+ * Two free OSRM demo endpoints are configured (swap DEFAULT_FOOT_URL / DEFAULT_CAR_URL to self-host):
+ *   - Footpath: routing.openstreetmap.de/routed-foot  (FOSSGIS, ~2-day OSM data refresh)
+ *   - Main St:  router.project-osrm.org               (volunteer, no SLA, often down)
+ *
+ * These are volunteer-run demo servers — unreliable for production.
+ * Users can self-host OSRM (Docker: osrm/osrm-backend) and update URLs here.
+ * Self-hosting guide: https://github.com/Project-OSRM/osrm-backend/wiki/Docker
  */
 object RouteFinder {
 
@@ -77,9 +85,6 @@ object RouteFinder {
                     steps = steps
                 )
             } catch (e: Exception) {
-                if (!BuildConfig.DEBUG) {
-                    FirebaseCrashlytics.getInstance().recordException(e)
-                }
                 null
             }
         }

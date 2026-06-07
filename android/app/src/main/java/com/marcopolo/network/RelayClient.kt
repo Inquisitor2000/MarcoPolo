@@ -1,7 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Marco Polo Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package com.marcopolo.network
 
-import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.marcopolo.BuildConfig
 import com.marcopolo.model.WsMessage
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -49,9 +50,6 @@ class RelayClient {
             val room = json.decodeFromString<com.marcopolo.model.RoomResponse>(body)
             Result.success(room.code)
         } catch (e: Exception) {
-            if (!BuildConfig.DEBUG) {
-                FirebaseCrashlytics.getInstance().recordException(e)
-            }
             Result.failure(e)
         }
     }
@@ -84,9 +82,6 @@ class RelayClient {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (!BuildConfig.DEBUG) {
-                    FirebaseCrashlytics.getInstance().recordException(t)
-                }
                 _messages.trySend(WsMessage(type = "error"))
             }
         })

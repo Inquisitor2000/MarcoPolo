@@ -1,10 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Marco Polo Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -34,7 +35,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 }
 
@@ -70,9 +70,6 @@ dependencies {
     // Maps (OpenStreetMap)
     implementation("org.osmdroid:osmdroid-android:6.1.20")
 
-    // Location (Google Play Services)
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-
     // Network
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
@@ -86,8 +83,5 @@ dependencies {
     // Core
     implementation("androidx.core:core-ktx:1.18.0")
 
-    // Firebase (Analytics + Crashlytics)
-    implementation(platform("com.google.firebase:firebase-bom:34.14.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-crashlytics")
+
 }

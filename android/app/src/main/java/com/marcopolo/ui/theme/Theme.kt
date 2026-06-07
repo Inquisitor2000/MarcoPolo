@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Marco Polo Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package com.marcopolo.ui.theme
 
 import androidx.compose.material3.MaterialTheme

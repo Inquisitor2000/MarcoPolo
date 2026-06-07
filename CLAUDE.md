@@ -35,7 +35,7 @@
 - **Found dialog race — second guard** (ADDED). `partner_disconnected` handler now checks `partnerDistance <= FOUND_THRESHOLD_M` as fallback — if partner was within 15m when they left, treat as found instead of disconnect. Covers race where partner navigates home before the other side processes its own location update that would trigger found.
 - **Polo room code input** (CHANGED). `RoundedCornerShape(12.dp)` on `OutlinedTextField` to match other UI elements.
 - **Route crossfade removed** (REMOVED). Had sequential fade-out-then-fade-in on route geometry change. Caused chaotic animation because crossfade triggered on every GPS coordinate update (routeKey included ownLat/Lng). Reverted to simple instant swap. Only remaining animation is `routeAlpha` animateFloatAsState (600ms, reveal/hide only, triggered by `partnerLat != null && ownLat != null` transition).
-- **LSP false positives**: All `UNRESOLVED_REFERENCE` for Android/Kotlin SDK types are from missing Android SDK indexing, not real compile errors.
+- **LSP globally disabled** (`lsp: false` in `~/.config/opencode/opencode.json`). Android/Kotlin SDK types produce false `UNRESOLVED_REFERENCE` from missing SDK indexing — not real compile errors. LSP off avoids the noise.
 - **Map not centered on own position on first render** (FIXED). `bboxZoomTrigger` → `zoomToBoundingBox()` override the center set by `followMe`. Sequence was: update lambda `setCenter(ownLat,ownLng)` → bboxZoom LaunchedEffect `zoomToBoundingBox()` shifts center to midpoint between both markers. Fix: added `mv.controller.setCenter(GeoPoint(oLat, oLng))` in the LaunchedEffect after `zoomToBoundingBox`, so zoom level fits both markers but center stays on user.
 - **Follow-me always-on** (CHANGED). Removed follow-me toggle button and pan-detection touch listener. `followMe` now `val followMe = true`. Touch listener consumes all events (`return true`) to prevent map panning. Controls column only has checkmark + zoom buttons.
 - **Routing mode toggle** (CHANGED). Custom pill toggle (80×32dp, rounded 16dp) with walk/car icons on dark circular backdrops (26dp, always on top of the sliding thumb). Thumb is a 40dp pill sliding with spring animation behind icons. Inverted logic: footpath = thumb left, street = thumb right. Each device persists choice via SharedPreferences (`routing_footpath`, default true). `setRoutingMode()` saves + calls `requestRouteUpdate(force=true)`.
@@ -45,15 +45,16 @@
 - **Routing mode toggle layout shift** (FIXED). Countdown timer `formatCountdown()` text changed pixel width each tick (proportional font → different digit widths). The `weight(1f)` Box holding the routing toggle in the header Row absorbed the slack, shifting the toggle every second. Fix: wrap countdown in `Box(width=80.dp)` + `FontFamily.Monospace` for constant width.
 - **AndroidView ctx scope** (KNOWN). `ctx` from `factory = { ctx -> }` is NOT available in `update = { view -> }`. Use `view.context` in update block or do one-time work in factory.
 
+## Phase 2 Details
+- **LocationManager NETWORK_PROVIDER**: Must also register for network updates alongside GPS — GPS alone takes 30s+ indoor first fix. Network gives fast (coarse) fix, GPS overrides when satellite lock acquired.
+- **Deferred partner reveal**: Partner location may arrive via WS before own GPS fixes (ownLat=null → distance null → partnerLat stays null). Fixed by re-evaluating distance from rawPartnerLat/Lng when own GPS first fires (in `onLocationReady()` combine block). Applied to both ViewModels.
+
 ## Architecture
 - **No cloud accounts/API keys** — osmdroid + CartoDB Voyager tiles (free, no key)
 - **Multi-language**: EN/RO/RU runtime switching. `LocaleManager` persists choice to SharedPreferences. `MainActivity.attachBaseContext()` wraps Context with saved locale. `LanguageSwitcher` (circular green border, top-right of home screen, no fill, cycles EN→RO→RU→EN) triggers `activity.recreate()` on tap. All user-facing strings in `values/strings.xml` (EN), `values-ro/` (RO), `values-ru/` (RU). Russian uses Cyrillic (Марко Поло, Марко, Поло). Nav instruction strings in resources but `computeNavInstruction()` still uses hardcoded English (needs context param).
 - **Relay**: `https://marcopolo-relay.onrender.com` (WebSocket relay for room/location sharing)
 - **Server thinness**: ~80 lines of logic. Pure dumb pipe — no OSRM, no persistence, no auth. In-memory Map, 17min TTL cleanup. ~0.8 MB per 15-min session (bidirectional). Free tier handles ~4000 MAU / 200 peak concurrent rooms before bandwidth becomes first limit (~100 GB/mo).
-- **Routing**: Two OSRM modes toggleable per-device via header Switch. Both modes free, no key:
-  - **Footpath** (default): `routing.openstreetmap.de/routed-foot` — OSRM compiled with footpath data, better pedestrian coverage.
-  - **Main St**: `router.project-osrm.org` — standard OSRM foot profile, road-oriented.
-  Both Marco and Polo call OSRM independently. `steps=true` returns turn-by-turn maneuvers. Step-finding via point-to-polyline projection in MarcoMap.kt; falls back to cardinal direction when off-route (>60m) or steps unavailable.
+- **Routing**: See [Routing](#Routing) section below for OSRM endpoints, usage, and GraphHopper evaluation.
 - **Found dialog**: Shared `mutableStateOf(false)` in `MarcoPoloNavGraph` (MainActivity.kt). Game screens call `onFound()` → sets flag + `popBackStack("home")`. HomeScreen renders congratulation full-screen `Box` overlay on top. "Awesome!" calls `onDismissFound()` to clear flag.
 - **Distance haptics**: `VIRTUAL_KEY` haptic fires once per milestone (1000, 500, 250, 125, 75, 50 m) when crossing closer. Tracked in `remember { mutableSetOf<Int>() }`. Found dialog gets `CONFIRM` haptic.
 - **Crossfade transitions**: `Crossfade(tween(400))` between room/loading/map states. Route polyline alpha animated via `animateFloatAsState(tween(600))` (reveal/hide only, no crossfade on mode switch).
@@ -67,7 +68,7 @@
 - `MarcoMap.kt` — osmdroid wrapper with markers (You 36dp, partner 36dp), polylines (fg 10px, bg 22px, ROUND joins), follow-me always-on (no toggle, panning blocked), non-animated zoomToBoundingBox with post-zoom re-center on own position, route polyline alpha animation (600ms tween, reveal/hide only, no crossfade), maxZoomLevel 19, minZoomLevel 15, bearing rounded to 2°, orientation delayed 2s, BitmapDrawable cached. Nav instruction card: turn-by-turn steps or cardinal fallback. Control buttons: checkmark + zoom +/- only (48dp, Box+CircleShape+clickable, no FloatingActionButton). Controls column bottom=28dp aligned with nav card.
 - `RouteFinder.kt` — OSRM client for both modes. `findRoute()` takes `useFootpath: Boolean` to select server. Parses routes with `steps=true`, returns `RouteResult(geometry, distance, duration, steps)` where steps are `List<RouteStep>` with instruction, distance, geometry, modifier. `generateInstruction()` builds human-readable text from OSRM maneuver type/modifier/name.
 - Both ViewModels have `useFootpath: StateFlow<Boolean>` backed by SharedPreferences. `setRoutingMode(footpath)` saves to prefs and triggers `requestRouteUpdate(force=true)`.
-- `LocationService.kt` — foreground service, FusedLocationProviderClient, compass via rotation sensor, `getLastLocation()` fallback, GPS 3s min interval, compass SENSOR_DELAY_NORMAL (200ms).
+- `LocationService.kt` — foreground service, Android `LocationManager` with all known providers (gps/network/fused/passive), compass via rotation-vector sensor, `getLastKnownLocation()` fallback across all providers, GPS 3s min interval, compass SENSOR_DELAY_NORMAL (200ms). Background grace: 60s before releasing GPS+sensor.
 - `PermissionsViewModel.kt` — PENDING/GRANTED/DENIED state machine for location permission
 - `HapticClick.kt` — `hapticClick()` composable wrapper for all 15 interactive buttons
 - `LocaleManager.kt` — SharedPreferences-backed locale persistence. `getSavedLocale()`, `setLocale()`, `updateLocale()`. Used by `MainActivity.attachBaseContext()` and `LanguageSwitcher`.
@@ -97,26 +98,19 @@ Three states per screen (once permissions granted):
 - `foundDialogEnabledAtMs` set to `currentTimeMillis + 20s` on `partner_joined`. Found dialog suppressed until time elapses.
 - **pointToPolylineDistance coordinate swap** (FIXED). `pointToPolylineDistance()` extracted segment endpoints as `(lng, lat)` while user position was `(userLat, userLng)` — mixed lat with lng in `pointToSegmentDistance`. Produced garbage distances. On simulator (perfect coordinates) relative ordering stayed accidentally correct. On real GPS (noisy), amplified jitter into wrong step selection, consistently showing next street. Fix: extract as `(lat, lng)` consistent with user position.
 
-## Firebase Configuration
-- **Dependencies**: Firebase BoM 34.14.0, Analytics, Crashlytics (`com.google.gms:google-services:4.4.4`, `com.google.firebase:firebase-crashlytics-gradle:3.0.7`)
-- **Project**: `marco-polo-44ee3` (project number: 992041143673), package: `com.marcopolo`
-- **Config file**: `android/app/google-services.json`
-- **Gating**: All Firebase calls guarded with `if (!BuildConfig.DEBUG)` — release-only
-- **Auto screen tracking**: Not disabled (negligible — 3 screens). We only log 6 custom events.
-- **Custom events** (6 total, same on Marco + Polo):
-  - `room_created` (Marco) / `room_joined` (Polo) — session start
-  - `partner_connected` — WebSocket session active
-  - `navigation_started` — partner revealed (distance >10m)
-  - `connection_lost` — with `reason` param: `partner_disconnected` or `connection_error`
-  - `session_complete` — found dialog shown
-- **Crashlytics**: `recordException()` on OSRM failures, WS createRoom failures, WebSocket onFailure callbacks
-- **ProGuard**: `-keepattributes SourceFile,LineNumberTable` for readable stack traces
-- **BuildConfig**: `buildFeatures.buildConfig = true` must stay enabled (used for debug gating)
-- **APK impact**: +1.4MB (4.4MB → 5.8MB after R8 tree-shaking)
+## Routing
+- **Two OSRM endpoints** (free, no key, volunteer-run, no SLA):
+  - `routing.openstreetmap.de/routed-foot` (FOSSGIS, ~2-day data refresh)
+  - `router.project-osrm.org` (demo server, frequently down)
+- **Both sides call OSRM independently** — no route sharing over WebSocket. Each device has own origin.
+- **~60-90 API calls per 15-min game** (both devices combined, debounced 10s/30m movement)
+- **GraphHopper evaluated** — free tier (500 credits/day) ~6-7 games/day total for both devices. Not enough for multi-user use. Paid tiers viable if needed.
+- **OSRM URLs are hardcoded** in `RouteFinder.kt` `findRoute()`. To self-host: run `osrm/osrm-backend` Docker and update `DEFAULT_FOOT_URL`/`DEFAULT_CAR_URL`.
 
-## Future Features
-- **GraphHopper for footpath mode**: Current footpath mode uses OSRM `routed-foot` instance. GraphHopper `foot` profile has dedicated pedestrian network with better path coverage (especially Eastern Europe). Would need API key (free tier: 500 req/day). Would replace the `routing.openstreetmap.de/routed-foot` URL in RouteFinder.kt when `useFootpath=true`. GraphHopper provides pre-formatted instruction text (no more `generateInstruction()`).
-- **Server-side Firebase Analytics**: Server events from `server.js` on room created (+ code hash), fully packed, and session_complete forwarded.
-
-## TODO
-- **App icon**: Current icon is the default Android icon. Replace with branded Marco Polo logo.
+## F-Droid Phases
+- **Phase 1 ✓** — Removed Firebase Analytics + Crashlytics (all 4 files cleaned, google-services.json deleted, build config cleaned)
+- **Phase 2 ✓** — Replaced `play-services-location` with Android `LocationManager` (AOSP-compatible). Removed `FusedLocationProviderClient`/`LocationCallback`/`LocationRequest` in favor of `LocationManager.requestLocationUpdates()` with `GPS_PROVIDER`. `getLastLocation()` → `getLastKnownLocation()` with GPS→Network→Passive fallback chain.
+- **Phase 3** — Skipped: Render.com relay is fine. Self-hosting already documented in `server/DEPLOY.md`. `ServerConfig.kt` has a single `DEFAULT_URL` to change.
+- **Phase 4** — Skipped: `com.marcopolo` is F-Droid-compatible; rename breaks in-place updates for existing users
+- **Phase 5 ✓** — SPDX license headers (GPL-3.0-or-later) in all 33 source files (19 Kotlin, 10 XML, 3 Gradle, 1 JS) + LICENSE file
+- **Phase 6** — App icon + metadata for F-Droid listing

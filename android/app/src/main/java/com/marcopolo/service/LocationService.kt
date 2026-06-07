@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Marco Polo Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package com.marcopolo.service
 
 import android.app.Notification
@@ -10,18 +13,20 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Foreground service that polls GPS via FusedLocationProviderClient
+ * Foreground service that polls GPS via Android LocationManager
  * and exposes current location as a StateFlow.
  *
  * Lifecycle-aware: reduces GPS + sensor when the app is backgrounded > 60s.
@@ -46,7 +51,7 @@ class LocationService : Service(), SensorEventListener {
         private val _compassAccuracy = MutableStateFlow(SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM)
         val compassAccuracy: StateFlow<Int> = _compassAccuracy.asStateFlow()
 
-        /** When true, the next onStartCommand will skip fusedLocationClient.lastLocation
+        /** When true, the next onStartCommand will skip getLastKnownLocation
          *  to avoid seeding a fresh session with stale GPS from a previous session. */
         private var skipLastLocation = false
 
@@ -89,8 +94,8 @@ class LocationService : Service(), SensorEventListener {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var locationCallback: LocationCallback
+    private lateinit var locationManager: LocationManager
+    private lateinit var locationListener: LocationListener
     private lateinit var sensorManager: SensorManager
     private var rotationVectorSensor: Sensor? = null
 
@@ -114,7 +119,7 @@ class LocationService : Service(), SensorEventListener {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
 
@@ -130,10 +135,26 @@ class LocationService : Service(), SensorEventListener {
         // Fetch last known location so the UI doesn't block waiting for first GPS fix.
         // Skip this after a session end (clearCache was called) to avoid stale data.
         if (!skipLastLocation) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null && _currentLocation.value == null) {
-                    _currentLocation.value = location
+            var last: Location? = null
+            try {
+                val allProviders = locationManager.getProviders(false).ifEmpty {
+                    listOf("gps", "network", "passive", "fused")
                 }
+                for (provider in allProviders) {
+                    try {
+                        val loc = locationManager.getLastKnownLocation(provider)
+                        if (loc != null && (last == null || loc.time > last.time)) {
+                            last = loc
+                        }
+                    } catch (_: IllegalArgumentException) {
+                        // Unknown provider — skip
+                    }
+                }
+            } catch (_: SecurityException) {
+                // Permission lost between grant and service start
+            }
+            if (last != null && _currentLocation.value == null) {
+                _currentLocation.value = last
             }
         }
         skipLastLocation = false
@@ -166,7 +187,7 @@ class LocationService : Service(), SensorEventListener {
      *  GPS and sensor are stopped until [enterForeground] restores them. */
     private fun reduceToBackground() {
         if (gpsActive) {
-            fusedLocationClient.removeLocationUpdates(locationCallback)
+            locationManager.removeUpdates(locationListener)
             gpsActive = false
         }
         if (sensorActive) {
@@ -177,28 +198,51 @@ class LocationService : Service(), SensorEventListener {
 
     // ── GPS registration ─────────────────────────────────────────
 
-    /** Register GPS location updates via FusedLocationProviderClient.
-     *  Idempotent — safe to call multiple times. */
+    /** Register location updates with ALL available providers — explicitly try
+     *  gps, network, fused, passive — whichever provides the fastest first fix
+     *  on the device. Idempotent — safe to call multiple times. */
     private fun registerGps() {
         if (gpsActive) return
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                _currentLocation.value = result.lastLocation
+        locationListener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                _currentLocation.value = location
+            }
+            @Suppress("DEPRECATION")
+            override fun onProviderDisabled(provider: String) {}
+            @Suppress("DEPRECATION")
+            override fun onProviderEnabled(provider: String) {}
+            @Suppress("DEPRECATION", "OverridingDeprecatedMember")
+            override fun onStatusChanged(provider: String, status: Int, extras: Bundle) {}
+        }
+        var anyRegistered = false
+        // Explicit list of known providers — broader than getProviders(true)
+        // which varies across ROMs and may hide network/fused even when usable.
+        for (provider in listOf(
+            LocationManager.GPS_PROVIDER,    // "gps" — satellite, accurate, slow first fix
+            LocationManager.NETWORK_PROVIDER, // "network" — WiFi/cell, fast first fix
+            "fused",                         // system fused provider (API 17+)
+            LocationManager.PASSIVE_PROVIDER // "passive" — receives from other apps
+        )) {
+            try {
+                if (!locationManager.isProviderEnabled(provider)) continue
+                locationManager.requestLocationUpdates(
+                    provider,
+                    3000L,   // minTimeMs
+                    0f,      // minDistanceM — report every update
+                    locationListener,
+                    Looper.getMainLooper()
+                )
+                anyRegistered = true
+            } catch (_: SecurityException) {
+                // Skip providers we don't have permission for
+            } catch (_: IllegalArgumentException) {
+                // Provider doesn't exist on this device
             }
         }
-        val locationRequest = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY, 5000L
-        ).apply {
-            setMinUpdateIntervalMillis(3000L)
-        }.build()
-        try {
-            fusedLocationClient.requestLocationUpdates(
-                locationRequest, locationCallback, mainLooper
-            )
+        if (!anyRegistered) {
+            stopSelf()  // No location provider available at all
+        } else {
             gpsActive = true
-        } catch (_: SecurityException) {
-            // Permission lost between grant and service start
-            stopSelf()
         }
     }
 
@@ -244,7 +288,7 @@ class LocationService : Service(), SensorEventListener {
         instance = null
         bgHandler.removeCallbacks(bgReduceTask)
         if (sensorActive) sensorManager.unregisterListener(this)
-        if (gpsActive) fusedLocationClient.removeLocationUpdates(locationCallback)
+        if (gpsActive) locationManager.removeUpdates(locationListener)
         // Reset state flows so fresh session starts clean
         _currentLocation.value = null
         _compassHeading.value = null
