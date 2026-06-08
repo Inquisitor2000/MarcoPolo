@@ -15,9 +15,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.marcopolo.service.LocationService
 import com.marcopolo.ui.HomeScreen
 import com.marcopolo.ui.MarcoScreen
@@ -129,11 +131,11 @@ fun MarcoPoloNavGraph(deepLinkCode: String? = null) {
         navController.popBackStack("home", false)
     }
 
-    // Navigate directly to Polo when a deep link arrives
+    // Navigate to Polo config with code pre-filled when a deep link arrives
     LaunchedEffect(deepLinkCode) {
         val code = deepLinkCode ?: return@LaunchedEffect
         if (navController.currentDestination?.route == "home") {
-            navController.navigate("polo_map/$code") {
+            navController.navigate("polo_config?code=$code") {
                 popUpTo("home") { inclusive = false }
             }
         }
@@ -154,12 +156,23 @@ fun MarcoPoloNavGraph(deepLinkCode: String? = null) {
                 onFound = onFound
             )
         }
-        composable("polo_config") {
+        composable(
+            route = "polo_config?code={code}",
+            arguments = listOf(
+                navArgument("code") {
+                    type = NavType.StringType
+                    defaultValue = null
+                    nullable = true
+                }
+            )
+        ) { backStackEntry ->
+            val code = backStackEntry.arguments?.getString("code")
             PoloConfigScreen(
-                onStartSession = { code ->
-                    navController.navigate("polo_map/$code")
+                onStartSession = { roomCode ->
+                    navController.navigate("polo_map/$roomCode")
                 },
-                onBack = { navController.popBackStack("home", false) }
+                onBack = { navController.popBackStack("home", false) },
+                initialCode = code
             )
         }
         composable("polo_map/{code}") { backStackEntry ->

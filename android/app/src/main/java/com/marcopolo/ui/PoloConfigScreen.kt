@@ -27,9 +27,10 @@ import com.marcopolo.util.hapticClick
 @Composable
 fun PoloConfigScreen(
     onStartSession: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    initialCode: String? = null
 ) {
-    var code by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf(initialCode ?: "") }
 
     Scaffold(
         topBar = {
