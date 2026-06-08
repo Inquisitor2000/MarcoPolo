@@ -9,6 +9,13 @@
 
     <!-- Splash screen shown on cold launch before Activity renders -->
     <style name="Theme.MarcoPolo.Splash" parent="Theme.MarcoPolo">
+        <!-- Pre-Android 12: windowBackground with bg color + icon -->
         <item name="android:windowBackground">@drawable/splash_screen</item>
+
+        <!-- Android 12+ system splash: icon + themed background -->
+        <!-- windowSplashScreenBackground resolves @color/splash_background
+             to light (day) or dark (night) via values(-night)/colors.xml -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
     </style>
 </resources>
