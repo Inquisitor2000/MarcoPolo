@@ -1,6 +1,6 @@
 # FindMe (Marco Polo)
 
-Real-time location sharing for two people to find each other in crowds. One creates a session (Marco), the other joins with a 4-character code (Polo). Both see each other on a map with a walking route and a 15-minute countdown.
+Real-time location sharing for two people to find each other in crowds. One creates a session (Marco), the other joins with a 4-character code (Polo). Both see each other on a map with a walking route and a 15-minute session timer.
 
 ## Features
 
@@ -10,7 +10,7 @@ Real-time location sharing for two people to find each other in crowds. One crea
 - **Routing modes** — foot (pedestrian paths) or car (streets)
 - **Multi-language** — English, Romanian, Russian
 - **F-Droid ready** — no Google Play Services dependency
-- **15-min countdown** — auto-resets on location update
+- **15-min session timer** — session ends when time expires
 
 ## Screenshots
 
