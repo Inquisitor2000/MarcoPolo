@@ -25,7 +25,7 @@
 
     <string name="share_code">Partajează codul cu Polo</string>
     <string name="share_invite">Invită-l pe Polo</string>
-    <string name="share_text">🐺 Eu spun Marco, tu spui Polo.\n%s</string>
+    <string name="share_text">Eu sunt Marco, tu ești Polo\n%s</string>
 
     <string name="waiting_marco_connect">Se așteaptă conectarea lui Marco…</string>
     <string name="waiting_polo_connect">Se așteaptă conectarea lui Polo…</string>

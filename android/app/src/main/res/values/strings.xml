@@ -25,7 +25,7 @@
 
     <string name="share_code">Share code with Polo</string>
     <string name="share_invite">Invite Polo</string>
-    <string name="share_text">🐺 I say Marco, You say Polo.\n%s</string>
+    <string name="share_text">I\'m Marco, You are Polo\n%s</string>
 
     <string name="waiting_marco_connect">Waiting for Marco to connect…</string>
     <string name="waiting_polo_connect">Waiting for Polo to connect…</string>
