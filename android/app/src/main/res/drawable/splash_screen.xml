@@ -5,7 +5,20 @@
     <!-- Dark background -->
     <item android:drawable="@color/splash_background"/>
 
-    <!-- Centered icon (scaled to ~40% of screen) -->
+    <!-- Green rim circle behind the icon -->
+    <item
+        android:width="156dp"
+        android:height="156dp"
+        android:gravity="center">
+        <shape android:shape="oval">
+            <solid android:color="@android:color/transparent"/>
+            <stroke
+                android:width="6dp"
+                android:color="#FF4ADE80"/>
+        </shape>
+    </item>
+
+    <!-- Centered icon -->
     <item
         android:width="144dp"
         android:height="144dp"
