@@ -1,17 +1,13 @@
-# F-Droid metadata for FindMe (Marco Polo)
-# Submit this file to: https://gitlab.com/fdroid/fdroiddata
-# Path in that repo: metadata/com.marcopolo.yml
-# See: https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/
-
 Categories:
   - Navigation
 License: GPL-3.0-or-later
+AuthorName: Sergiu Baraboi
 SourceCode: https://github.com/Inquisitor2000/marcopolo-relay
 IssueTracker: https://github.com/Inquisitor2000/marcopolo-relay/issues
 Changelog: https://github.com/Inquisitor2000/marcopolo-relay/releases
 
-AutoName: FindMe
 Name: FindMe (Marco Polo)
+AutoName: Marco Polo
 Description: |-
   Find your friends and family in crowded places — no Google Play
   Services required.
@@ -40,14 +36,15 @@ Builds:
     subdir: android
     gradle:
       - yes
-    output: app/build/outputs/apk/release/app-release-unsigned.apk
     rm:
-      - app/build/intermediates
+      - package.json
+      - server/*
     prebuild:
       - sed -i -e '/signingConfig signingConfigs.getByName("debug")/d' app/build.gradle.kts
+      - sed -i -e '/foojay-resolver-convention/d' settings.gradle.kts
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-UpdateCheckData: android/app/build.gradle.kts|versionName\s*=\s*"(.*)"|.|(.*)
+UpdateCheckData: android/app/build.gradle.kts|versionCode\s*=\s*(\d+)|.|versionName\s*=\s*"(.*)"
 CurrentVersion: 1.1.0
 CurrentVersionCode: 2
