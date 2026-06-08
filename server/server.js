@@ -108,6 +108,25 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Android App Links verification (auto-verify HTTPS deep links)
+  if (req.method === "GET" && req.url === "/.well-known/assetlinks.json") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: "com.marcopolo",
+          sha256_cert_fingerprints: [
+            // Debug keystore — replace with release key fingerprint before publishing
+            "FF:23:59:F9:3A:F9:58:12:F3:15:9F:D6:5D:7C:BF:08:E8:56:59:04:7B:C1:71:00:77:C9:29:CA:BB:2D:F2:5E"
+          ]
+        }
+      }
+    ]));
+    return;
+  }
+
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, rooms: rooms.size }));

@@ -100,17 +100,17 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Extract room code from deep links:
-     *  - marcopolo://join/{CODE}
-     *  - https://marcopolo-relay.onrender.com/join/{CODE}
+     *  - https://marcopolo-relay.onrender.com/join/{CODE}  → path = "/join/1234"
+     *  - marcopolo://join/{CODE}                           → path = "/1234", host = "join"
      */
     private fun parseDeepLink(intent: Intent?): String? {
         if (intent?.action != Intent.ACTION_VIEW) return null
         val uri = intent.data ?: return null
         val path = uri.path ?: return null
 
-        // Only allow /join/{CODE} paths
-        val match = Regex("^/join/([0-9]{4})$").find(path)
-        return match?.groupValues?.getOrNull(1)
+        // Both URL shapes end with /{CODE} — extract trailing 4 digits
+        // /join/1234 or /1234 → "1234"
+        return Regex("/([0-9]{4})$").find(path)?.groupValues?.getOrNull(1)
     }
 }
 
