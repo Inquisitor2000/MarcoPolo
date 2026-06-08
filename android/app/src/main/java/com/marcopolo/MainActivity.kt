@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
         // Switch from splash theme to main theme before super.onCreate
         // so the splash drawable (icon on dark bg) is shown during cold start,
         // then seamlessly transitions to the main activity theme.
+        installSplashScreen()
         setTheme(R.style.Theme_MarcoPolo)
         super.onCreate(savedInstanceState)
 
