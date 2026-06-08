@@ -1,0 +1,53 @@
+# F-Droid metadata for FindMe (Marco Polo)
+# Submit this file to: https://gitlab.com/fdroid/fdroiddata
+# Path in that repo: metadata/com.marcopolo.yml
+# See: https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/
+
+Categories:
+  - Navigation
+License: GPL-3.0-or-later
+SourceCode: https://github.com/Inquisitor2000/marcopolo-relay
+IssueTracker: https://github.com/Inquisitor2000/marcopolo-relay/issues
+Changelog: https://github.com/Inquisitor2000/marcopolo-relay/releases
+
+AutoName: FindMe
+Name: FindMe (Marco Polo)
+Description: |-
+  Find your friends and family in crowded places — no Google Play
+  Services required.
+
+  One person creates a session (Marco), the other joins with a
+  4-character code (Polo). Both see each other on a real-time map
+  with a walking route and turn-by-turn navigation.
+
+  Features:
+  ■ Real-time map with free CartoDB tiles (no API key)
+  ■ Turn-by-turn navigation with street names and arrows
+  ■ Routing modes: foot (pedestrian) or car (streets)
+  ■ 15-minute session timer
+  ■ Multi-language: English, Romanian, Russian
+  ■ No Google Play Services — works on any device
+
+  Perfect for festivals, concerts, malls, or any crowded space.
+
+RepoType: git
+Repo: https://github.com/Inquisitor2000/marcopolo-relay
+
+Builds:
+  - versionName: 1.1.0
+    versionCode: 2
+    commit: v1.1.0
+    subdir: android
+    gradle:
+      - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+    rm:
+      - app/build/intermediates
+    prebuild:
+      - sed -i -e '/signingConfig signingConfigs.getByName("debug")/d' app/build.gradle.kts
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+UpdateCheckData: android/app/build.gradle.kts|versionName\s*=\s*"(.*)"|.|(.*)
+CurrentVersion: 1.1.0
+CurrentVersionCode: 2
