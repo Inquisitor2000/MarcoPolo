@@ -9,11 +9,6 @@
 
     <!-- Splash screen shown on cold launch before Activity renders -->
     <style name="Theme.MarcoPolo.Splash" parent="Theme.MarcoPolo">
-        <!-- Pre-Android 12: windowBackground with full layer-list (oval + icon) -->
         <item name="android:windowBackground">@drawable/splash_screen</item>
-
-        <!-- Android 12+ system splash: icon with green rim, dark bg -->
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_rimmed</item>
-        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
     </style>
 </resources>

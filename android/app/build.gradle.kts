@@ -83,8 +83,5 @@ dependencies {
     // Core
     implementation("androidx.core:core-ktx:1.18.0")
 
-    // SplashScreen API (Android 12+ system splash + backward compat)
-    implementation("androidx.core:core-splashscreen:1.2.0-alpha02")
-
 
 }
