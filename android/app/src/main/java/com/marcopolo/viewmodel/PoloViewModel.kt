@@ -281,7 +281,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                                 } else {
                                     current.copy(
                                         isActive = false,
-                                        error = "Marco disconnected",
+                                        error = "marco_disconnected",
                                         showDisconnectDialog = true
                                     )
                                 }
@@ -389,7 +389,7 @@ class PoloViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     "error", "disconnected" -> {
-                        _uiState.update { it.copy(error = "Connection lost") }
+                        _uiState.update { it.copy(error = "connection_lost") }
                     }
                 }
             }

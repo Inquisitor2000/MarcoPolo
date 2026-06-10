@@ -174,7 +174,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 onFailure = { e ->
                     _uiState.update {
-                        it.copy(error = "Failed to create room: ${e.message}")
+                        it.copy(error = "create_room|${e.message}")
                     }
                 }
             )
@@ -419,7 +419,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                                 } else {
                                     current.copy(
                                         isActive = false,
-                                        error = "Polo disconnected",
+                                        error = "polo_disconnected",
                                         showDisconnectDialog = true
                                     )
                                 }
@@ -508,7 +508,7 @@ class MarcoViewModel(application: Application) : AndroidViewModel(application) {
                         _uiState.update { it.copy(showFoundDialog = true) }
                     }
                     "error" -> {
-                        _uiState.update { it.copy(error = "Connection error") }
+                        _uiState.update { it.copy(error = "connection") }
                     }
                 }
             }

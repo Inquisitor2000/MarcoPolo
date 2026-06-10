@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.setContent
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -15,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -22,6 +24,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.marcopolo.service.LocationService
 import com.marcopolo.ui.HomeScreen
+import com.marcopolo.ui.LocalLanguageRefresh
 import com.marcopolo.ui.MarcoScreen
 import com.marcopolo.ui.PoloConfigScreen
 import com.marcopolo.ui.PoloMapScreen
@@ -74,7 +77,28 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MarcoPoloNavGraph(deepLinkCode = _deepLinkCode.value)
+                    // Language switch: incrementing langVersion recomputes
+                    // localizedCtx → CompositionLocalProvider propagates new
+                    // LocalContext to ALL composables → stringResource() picks
+                    // up new locale. MapView remember is NOT cleared.
+                    // We explicitly keep LocalActivityResultRegistryOwner to
+                    // prevent the wrapped context from breaking
+                    // rememberLauncherForActivityResult.
+                    val context = LocalContext.current
+                    var langVersion by remember { mutableIntStateOf(0) }
+
+                    val localizedCtx = remember(context, langVersion) {
+                        val code = LocaleManager.getSavedLocale(context)
+                        LocaleManager.updateLocale(context, code)
+                    }
+
+                    CompositionLocalProvider(
+                        LocalContext provides localizedCtx,
+                        LocalActivityResultRegistryOwner provides this@MainActivity,
+                        LocalLanguageRefresh provides { langVersion++ }
+                    ) {
+                        MarcoPoloNavGraph(deepLinkCode = _deepLinkCode.value)
+                    }
                 }
             }
         }

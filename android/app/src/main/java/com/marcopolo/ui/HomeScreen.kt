@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marcopolo.R
+import com.marcopolo.ui.LocalLanguageRefresh
 import com.marcopolo.util.hapticClick
 import com.marcopolo.viewmodel.PermissionsState
 import com.marcopolo.viewmodel.PermissionsViewModel
@@ -122,14 +123,13 @@ fun HomeScreen(
         // ── Permissions granted — show role selection ──
         Box(modifier = Modifier.fillMaxSize()) {
             // Language switcher top-right (below status bar)
+            val refreshLanguage = LocalLanguageRefresh.current
             LanguageSwitcher(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
                     .padding(top = 12.dp, end = 16.dp),
-                onLanguageChanged = {
-                    (context as? android.app.Activity)?.recreate()
-                }
+                onLanguageChanged = { refreshLanguage() }
             )
 
             Column(

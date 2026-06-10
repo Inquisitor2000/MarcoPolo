@@ -3,33 +3,29 @@
 
 package com.marcopolo.ui
 
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.hardware.SensorManager
-import android.view.MotionEvent
 import android.view.ViewGroup
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -68,6 +65,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -206,8 +204,22 @@ private fun circlePoints(lat: Double, lng: Double, radiusMeters: Double, numPoin
 }
 
 /** Distance in compact format. */
-private fun formatDistance(meters: Double): String =
-    if (meters < 1000.0) "${meters.toInt()} m" else "%.1f km".format(meters / 1000.0)
+private fun formatDistance(meters: Double, context: Context): String =
+    if (meters < 1000.0) context.getString(R.string.dist_meters, meters.toInt())
+    else context.getString(R.string.dist_kilometers, meters / 1000.0)
+
+/** Resolve relative direction label from string resources. */
+private fun getRelativeDirectionLabel(context: Context, idx: Int): String = when (idx) {
+    0 -> context.getString(R.string.nav_straight)
+    1 -> context.getString(R.string.nav_right_ahead)
+    2 -> context.getString(R.string.nav_right)
+    3 -> context.getString(R.string.nav_right_back)
+    4 -> context.getString(R.string.nav_back)
+    5 -> context.getString(R.string.nav_left_back)
+    6 -> context.getString(R.string.nav_left)
+    7 -> context.getString(R.string.nav_left_ahead)
+    else -> context.getString(R.string.nav_straight)
+}
 
 /** Compute walking guidance: either turn-by-turn (when on-route with steps)
  *  or relative-to-heading direction fallback (when off-route or steps unavailable).
@@ -218,7 +230,8 @@ private fun computeNavInstruction(
     partnerLat: Double?, partnerLng: Double?,
     ownBearing: Float?,
     distanceM: Double?,
-    routeSteps: List<RouteStep>
+    routeSteps: List<RouteStep>,
+    context: Context
 ): NavInstruction? {
     val olat = ownLat ?: return null
     val olng = ownLng ?: return null
@@ -236,7 +249,6 @@ private fun computeNavInstruction(
     val userFacing = ownBearing ?: 0f
     val relative = ((absBearing - userFacing) % 360f + 360f) % 360f
     val relativeArrows = arrayOf("↑", "↗", "→", "↘", "↓", "↙", "←", "↖")
-    val relativeLabels = arrayOf("Straight", "Right ahead", "Right", "Right back", "Back", "Left back", "Left", "Left ahead")
     val idx = ((relative + 22.5f) % 360f / 45f).toInt()
 
     // ── Turn-by-turn from route steps (when on-route) ──
@@ -249,38 +261,37 @@ private fun computeNavInstruction(
             // Last step = "Arrive" / reaching destination
             if (stepIdx >= routeSteps.size - 1 && dist < 50.0) {
                 val destArrow = if (routeSteps.size > 1) "📍" else relativeArrows[idx]
-                return NavInstruction(destArrow, "Arrive", formatDistance(dist))
+                return NavInstruction(destArrow, context.getString(R.string.nav_arrive), formatDistance(dist, context))
             }
             var instruction = step.instruction
-            val stepDist = formatDistance(step.distance)
+            val stepDist = formatDistance(step.distance, context)
             // OSRM depart step often has empty street name → just "Head".
             // Peek at next step for a meaningful street name.
             if (instruction == "Head" && stepIdx + 1 < routeSteps.size) {
                 val next = routeSteps[stepIdx + 1]
                 val parts = next.instruction.split(" onto ")
                 if (parts.size >= 2) {
-                    instruction = "Head towards ${parts[1]}"
+                    instruction = context.getString(R.string.nav_head_towards, parts[1])
                 }
             }
             // Still bare "Head" (no street anywhere) → use relative direction
             if (instruction == "Head") {
-                instruction = relativeLabels[idx]
+                instruction = getRelativeDirectionLabel(context, idx)
             }
             return NavInstruction(relativeArrows[idx], instruction, stepDist)
         }
     }
 
     // ── Fallback: direction relative to user's facing ──
-    return NavInstruction(relativeArrows[idx], relativeLabels[idx], formatDistance(dist))
+    return NavInstruction(relativeArrows[idx], getRelativeDirectionLabel(context, idx), formatDistance(dist, context))
 }
 
 /**
  * osmdroid MapView wrapped as a Compose component.
- * Shows own + partner markers, route polyline, zoom controls,
- * and a follow-me toggle. The map rotates smoothly around the
- * own GPS position.
+ * Shows own + partner markers, route polyline, checkmark button,
+ * and follow-me centering. Touch gestures (pan, pinch-zoom,
+ * two-finger rotate) are enabled. Map starts north-up.
  */
-@Suppress("ClickableViewAccessibility")
 @Composable
 fun MarcoMap(
     modifier: Modifier = Modifier,
@@ -328,7 +339,6 @@ fun MarcoMap(
     var prevOwnBearing by remember { mutableFloatStateOf(java.lang.Float.NaN) }
     var prevPartnerLat by remember { mutableDoubleStateOf(Double.NaN) }
     var prevPartnerLng by remember { mutableDoubleStateOf(Double.NaN) }
-    var prevOrientation by remember { mutableFloatStateOf(-1f) }
     var prevRouteKey by remember { mutableStateOf("") }
     var bboxDone by remember { mutableStateOf(false) }
     // Dynamic bbox re-zoom — re-adjust when follow-me is on and distance changes significantly
@@ -340,69 +350,6 @@ fun MarcoMap(
     val followMe = true
 
 
-    // ── Smooth map orientation via animateFloatAsState ──
-    // Round bearing to nearest 5° to damp compass noise while keeping
-    // rotation responsive during line-follow (~5-8° change at normal walking turn rate).
-    // animateFloatAsState handles mid-animation retargeting gracefully — when
-    // target value changes mid-animation it smoothly transitions from the current
-    // (partially-animated) value to the new target, unlike LaunchedEffect+Animatable
-    // which restarts from scratch on each change, causing the "chase" oscillation
-    // that resulted in ~1s uncontrolled rotation then revert.
-    //
-    // Exponential moving average on the raw compass bearing. Strong filtering
-    // (alpha=0.15) so brief sensor glitches (e.g., 0° spike during fast rotation)
-    // only move the smoothed value by 15% of the error per frame — producing at
-    // most one 5° orientation step instead of a full 45° snap to north.
-    var smoothBearing by remember { mutableFloatStateOf(0f) }
-    var hasSmoothBearing by remember { mutableStateOf(false) }
-    // Synchronous EMA — no LaunchedEffect cancel/restart overhead per sensor frame.
-    // Runs during composition whenever ownBearing or compassAccuracy changes.
-    remember(ownBearing, compassAccuracy) {
-        val b = ownBearing ?: return@remember
-        val accuracyOk = compassAccuracy >= SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM
-        if (!hasSmoothBearing) {
-            smoothBearing = b
-            hasSmoothBearing = true
-        } else if (accuracyOk) {
-            // Shortest-angle diff, handling 0/360 wrap
-            var diff = b - smoothBearing
-            if (diff > 180f) diff -= 360f
-            if (diff < -180f) diff += 360f
-            smoothBearing = ((smoothBearing + diff * 0.15f) % 360f + 360f) % 360f
-        }
-        // else: compass LOW/UNRELIABLE → skip update → smoothBearing frozen.
-        // When accuracy returns to MEDIUM+, EMA gradually catches up to real bearing.
-    }
-    // Continuous target orientation (de-cycled, no 0/360 wrap).
-    // Target rounds to 5° then wraps to [-360, 0]. Without de-cycling,
-    // crossing 359°→1° produces raw target 0→-360 → animateFloatAsState
-    // animates +360° difference → visible full-screen spin.
-    // Fix: maintain continuous numeric value via shortest-angle diffs.
-    var targetOrientation by remember { mutableFloatStateOf(0f) }
-    var prevRawTarget by remember { mutableFloatStateOf(0f) }
-    remember(smoothBearing) {
-        val raw = -(Math.round(smoothBearing / 5f) * 5f)
-        val d = raw - prevRawTarget
-        val diff = when {
-            d > 180f -> d - 360f
-            d < -180f -> d + 360f
-            else -> d
-        }
-        targetOrientation += diff
-        prevRawTarget = raw
-    }
-    // Delay orientation updates until map tiles settle (~2s).
-    // Prevents startup CPU burst: compass + map init + tile loading
-    // all competing on Honor 20's Mali-G76.
-    var orientationReady by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(2000L)
-        orientationReady = true
-    }
-    val mapOrientation by animateFloatAsState(
-        targetValue = if (orientationReady) targetOrientation else 0f,
-        animationSpec = tween(durationMillis = 300, easing = LinearEasing)
-    )
 
     // Show spinner until map tiles start loading
     var mapReady by remember { mutableStateOf(false) }
@@ -481,6 +428,21 @@ fun MarcoMap(
         }
     }
 
+    // ── Smooth bearing animation ──
+    // Tracks an unwrapped angle so animation always takes the shortest path
+    // across the 0°/360° boundary (e.g., 350° → 10° animates as +20°, not −340°).
+    var unwrappedBearing by remember { mutableFloatStateOf(ownBearing ?: 0f) }
+    val rawBearing = (ownBearing ?: 0f) % 360f
+    LaunchedEffect(rawBearing) {
+        val current = unwrappedBearing % 360f
+        val diff = ((rawBearing - current) % 360f + 540f) % 360f - 180f
+        unwrappedBearing += diff
+    }
+    val smoothBearing by animateFloatAsState(
+        targetValue = unwrappedBearing,
+        animationSpec = tween(durationMillis = 80)
+    )
+
     Box(modifier = modifier) {
         // ── osmdroid map layer ──
         AndroidView(
@@ -489,6 +451,10 @@ fun MarcoMap(
                 MapView(ctx).apply {
                     setTileSource(HIGH_QUALITY_TILES)
                     setMultiTouchControls(true)
+                    // Enable two-finger rotation gesture
+                    val rotationOverlay = RotationGestureOverlay(this)
+                    rotationOverlay.isEnabled = true
+                    overlays.add(rotationOverlay)
                     // Force software rendering to avoid Mali GPU driver hangs
                     // on Honor 20 / other devices with GPU issues in Canvas 2D rendering.
                     setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
@@ -560,8 +526,7 @@ fun MarcoMap(
                     }
                     overlays.add(partnerMarker)
 
-                    // ── Block all touch — prevent map panning (follow-me always-on) ──
-                    setOnTouchListener { _, _ -> true }
+
                 }
             },
             update = { _ ->
@@ -571,18 +536,18 @@ fun MarcoMap(
                 // ── Update own marker at GPS position (rotates with bearing) ──
                 if (ownLat != null && ownLng != null) {
                     val posChanged = ownLat != prevOwnLat || ownLng != prevOwnLng
-                    val bearing = ownBearing ?: 0f
-                    val bearingChanged = bearing != prevOwnBearing
+                    val displayBearing = smoothBearing
+                    val bearingChanged = displayBearing != prevOwnBearing
                     if (posChanged || bearingChanged) {
                         youMarker?.apply {
                             position = GeoPoint(ownLat, ownLng)
                             isEnabled = true
                             icon = youDrawable
-                            rotation = -bearing
+                            rotation = -displayBearing % 360f
                         }
                         prevOwnLat = ownLat
                         prevOwnLng = ownLng
-                        prevOwnBearing = bearing
+                        prevOwnBearing = displayBearing
                         dirty = true
                         if (posChanged && followMe && mv != null) {
                             mv.controller.setCenter(GeoPoint(ownLat, ownLng))
@@ -595,21 +560,6 @@ fun MarcoMap(
                         prevOwnLng = Double.NaN
                         prevOwnBearing = java.lang.Float.NaN
                         dirty = true
-                    }
-                }
-
-                // ── Rotate map only in follow-me mode — panning freely disengages it ──
-                if (followMe) {
-                    // Normalize continuous target to [0, 360) for osmdroid.
-                    // Continuous value avoids 0/360 animation spin; modulo here
-                    // strips the accumulated cycles.
-                    val orient = mapOrientation % 360f
-                    val normOrient = if (orient < 0) orient + 360f else orient
-                    if (abs(normOrient - prevOrientation) > 1.5f && mv != null) {
-                        mv.setMapOrientation(normOrient)
-                        prevOrientation = normOrient
-                        // Don't set dirty — setMapOrientation triggers internal redraw,
-                        // avoid redundant invalidate storm during rotation
                     }
                 }
 
@@ -735,8 +685,9 @@ fun MarcoMap(
         // ── Navigation instruction card (bottom-center overlay) ──
         // 3 lines: big arrow, "primary · distance", "Total: xxx"
         // Width-constrained to leave room for right-side zoom/control buttons.
+        val ctx = LocalContext.current
         val navInstr = remember(ownLat, ownLng, partnerLat, partnerLng, ownBearing, distanceToTarget, routeSteps) {
-            computeNavInstruction(ownLat, ownLng, partnerLat, partnerLng, ownBearing, distanceToTarget, routeSteps)
+            computeNavInstruction(ownLat, ownLng, partnerLat, partnerLng, ownBearing, distanceToTarget, routeSteps, ctx)
         }
         val config = LocalConfiguration.current
         val navCardMaxWidth = (config.screenWidthDp -
@@ -791,7 +742,7 @@ fun MarcoMap(
                     if (totalDistance != null) {
                         Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "${stringResource(R.string.nav_total)}: ${formatDistance(totalDistance)}",
+                        text = "${stringResource(R.string.nav_total)}: ${formatDistance(totalDistance, LocalContext.current)}",
                             fontSize = 14.sp,
                             color = ComposeColor(0xFF88FF88),
                             fontWeight = FontWeight.SemiBold
@@ -801,69 +752,28 @@ fun MarcoMap(
             }
         }
 
-        // ── Zoom controls (bottom-right) ──
+        // ── Checkmark (bottom-center) when partner ≤30m ──
         val onCheckmark = hapticClick { onCheckmarkClick?.invoke() }
-        val onZoomIn = hapticClick { mapView.value?.controller?.zoomIn() }
-        val onZoomOut = hapticClick { mapView.value?.controller?.zoomOut() }
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 10.dp, bottom = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Green checkmark — manual found when partner ≤30m
-            if (showCheckmark) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(ComposeColor(0xFF4CAF50))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onCheckmark() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = stringResource(R.string.cd_mark_found),
-                        tint = ComposeColor.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // Zoom in
+        if (showCheckmark) {
             Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 28.dp)
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(ComposeColor(0xDD000000))
+                    .background(ComposeColor(0xFF4CAF50))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { onZoomIn() },
+                    ) { onCheckmark() },
                 contentAlignment = Alignment.Center
             ) {
-                Text("+", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = ComposeColor(0xFF88FF88))
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Zoom out
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(ComposeColor(0xDD000000))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onZoomOut() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("−", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = ComposeColor(0xFF88FF88))
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = stringResource(R.string.cd_mark_found),
+                    tint = ComposeColor.White,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
 

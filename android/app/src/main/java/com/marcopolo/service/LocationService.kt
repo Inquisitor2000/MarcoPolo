@@ -24,6 +24,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.marcopolo.R
 
 /**
  * Foreground service that polls GPS via Android LocationManager
@@ -82,8 +83,8 @@ class LocationService : Service(), SensorEventListener {
         }
 
         /** Maximum interval (ms) between compass heading updates, even if sensor
-         *  fires more frequently. Reduces CPU from sensor event processing. */
-        private const val COMPASS_THROTTLE_MS = 500L
+         *  fires more frequently. Reduced to ~80ms for smoother bearing animation. */
+        private const val COMPASS_THROTTLE_MS = 80L
 
         /** Grace period (ms) after backgrounding before GPS + sensor are released. */
         private const val BACKGROUND_GRACE_MS = 60_000L
@@ -252,7 +253,7 @@ class LocationService : Service(), SensorEventListener {
     private fun registerSensor() {
         if (sensorActive) return
         rotationVectorSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
             sensorActive = true
         }
     }
@@ -300,7 +301,7 @@ class LocationService : Service(), SensorEventListener {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Marco Polo Location",
+            getString(R.string.notif_channel_name),
             NotificationManager.IMPORTANCE_LOW
         )
         val manager = getSystemService(NotificationManager::class.java)
@@ -309,8 +310,8 @@ class LocationService : Service(), SensorEventListener {
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Marco Polo")
-            .setContentText("Sharing your location")
+            .setContentTitle(getString(R.string.notif_title_sharing))
+            .setContentText(getString(R.string.notif_body_sharing))
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

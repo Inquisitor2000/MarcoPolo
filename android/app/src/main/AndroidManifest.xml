@@ -21,6 +21,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="locale|layoutDirection|orientation|screenSize"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.MarcoPolo.Splash">

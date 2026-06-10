@@ -74,4 +74,15 @@
 
     <string name="partner_role_polo">Polo</string>
     <string name="partner_role_marco">Marco</string>
+
+    <!-- Error messages -->
+    <string name="error_create_room">Eroare la crearea camerei: %s</string>
+    <string name="error_polo_disconnected">Polo s-a deconectat</string>
+    <string name="error_marco_disconnected">Marco s-a deconectat</string>
+    <string name="error_connection">Eroare de conectare</string>
+
+    <!-- Notification strings -->
+    <string name="notif_channel_name">Locația Marco Polo</string>
+    <string name="notif_title_sharing">Marco Polo</string>
+    <string name="notif_body_sharing">Îți distribui locația</string>
 </resources>

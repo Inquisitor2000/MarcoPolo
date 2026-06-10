@@ -74,4 +74,15 @@
 
     <string name="partner_role_polo">Polo</string>
     <string name="partner_role_marco">Marco</string>
+
+    <!-- Error messages -->
+    <string name="error_create_room">Failed to create room: %s</string>
+    <string name="error_polo_disconnected">Polo disconnected</string>
+    <string name="error_marco_disconnected">Marco disconnected</string>
+    <string name="error_connection">Connection error</string>
+
+    <!-- Notification strings -->
+    <string name="notif_channel_name">Marco Polo Location</string>
+    <string name="notif_title_sharing">Marco Polo</string>
+    <string name="notif_body_sharing">Sharing your location</string>
 </resources>

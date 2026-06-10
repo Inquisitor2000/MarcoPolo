@@ -48,6 +48,19 @@ import com.marcopolo.util.formatCountdown
 import com.marcopolo.util.hapticClick
 import com.marcopolo.viewmodel.MarcoViewModel
 
+/** Resolve ViewModel error codes to localized display text. */
+@Composable
+private fun resolveErrorText(error: String): String {
+    val prefix = error.substringBefore("|")
+    val arg = error.substringAfter("|", "")
+    return when (prefix) {
+        "create_room" -> stringResource(R.string.error_create_room, arg)
+        "polo_disconnected" -> stringResource(R.string.error_polo_disconnected)
+        "connection" -> stringResource(R.string.error_connection)
+        else -> error
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarcoScreen(
@@ -309,7 +322,7 @@ fun MarcoScreen(
                             )
                         ) {
                             Text(
-                                text = uiState.error!!,
+                                text = resolveErrorText(uiState.error!!),
                                 modifier = Modifier.padding(16.dp),
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -406,7 +419,7 @@ fun MarcoScreen(
                                         )
                                     ) {
                                         Text(
-                                            text = uiState.error!!,
+                                            text = resolveErrorText(uiState.error!!),
                                             modifier = Modifier.padding(16.dp),
                                             color = MaterialTheme.colorScheme.onErrorContainer
                                         )
