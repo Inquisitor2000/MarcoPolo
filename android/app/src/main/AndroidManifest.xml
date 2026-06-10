@@ -24,6 +24,7 @@
             android:configChanges="locale|layoutDirection|orientation|screenSize"
             android:exported="true"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MarcoPolo.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
