@@ -14,10 +14,8 @@ Real-time location sharing for two people to find each other in crowds. One crea
 
 ## Screenshots
 
-<img src="screenshots/Role Selection.png" width="200" alt="Role Selection">
-<img src="screenshots/Room Creation as Marco.png" width="200" alt="Room Creation">
-<img src="screenshots/Join Room as Polo.png" width="200" alt="Join Room">
-<img src="screenshots/Find Eachother.png" width="200" alt="Find Each Other">
+<img src="screenshots/Role Selection.png" width="200" alt="Role Selection"> | <img src="screenshots/Room Creation as Marco.png" width="200" alt="Room Creation">
+<img src="screenshots/Join Room as Polo.png" width="200" alt="Join Room"> | <img src="screenshots/Find Eachother.png" width="200" alt="Find Each Other">
 
 ## Architecture
 
