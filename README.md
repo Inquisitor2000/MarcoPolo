@@ -1,4 +1,4 @@
-# FindMe (Marco Polo)
+# Marco Polo
 
 Real-time location sharing for two people to find each other in crowds. One creates a session (Marco), the other joins with a 4-character code (Polo). Both see each other on a map with a walking route and a 15-minute session timer.
 
